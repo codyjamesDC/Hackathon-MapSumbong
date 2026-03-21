@@ -18,19 +18,23 @@ class ApiService {
     required String reporterId,
     String? photoUrl,
     String? sessionId,
+    double? latitude,
+    double? longitude,
   }) async {
-    debugPrint('ApiService: POST $baseUrl/process-message');
+    debugPrint('ApiService: POST \$baseUrl/process-message');
 
     try {
       final response = await http
           .post(
-            Uri.parse('$baseUrl/process-message'),
+            Uri.parse('\$baseUrl/process-message'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'message': message,
               'reporter_id': reporterId,
               if (photoUrl != null) 'photo_url': photoUrl,
               if (sessionId != null) 'session_id': sessionId,
+              if (latitude != null) 'latitude': latitude,
+              if (longitude != null) 'longitude': longitude,
             }),
           )
           .timeout(
