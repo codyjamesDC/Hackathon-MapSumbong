@@ -2,15 +2,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
-import uuid
+
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from supabase import create_client
 
-from services.cluster_service import detect_clusters
-from utils.geocoding import get_coordinates
+
+
 
 router = APIRouter()
 
@@ -25,12 +25,6 @@ def _get_supabase():
 
 # ── Request models ─────────────────────────────────────────────────────────────
 
-class ProcessMessageRequest(BaseModel):
-    message: str
-    reporter_id: str
-    photo_url: Optional[str] = None
-
-
 class UpdateStatusRequest(BaseModel):
     status: str
     resolution_note: Optional[str] = None
@@ -41,60 +35,6 @@ class UpdateStatusRequest(BaseModel):
 class DeleteReportRequest(BaseModel):
     deleted_by: str
     reason: str
-
-
-# ── Endpoints ──────────────────────────────────────────────────────────────────
-
-@router.post('/process-message')
-async def process_message(
-    request: ProcessMessageRequest,
-    background_tasks: BackgroundTasks,
-):
-    """Process a resident message using Gemini AI and save the report."""
-    from services.gemini_service import process_message as process_with_gemini
-
-    result = await process_with_gemini(request.message, request.photo_url)
-
-    if not result['success']:
-        return result
-
-    extracted = result['extracted_data']
-
-    coordinates = await get_coordinates(
-        extracted.get('location_text', ''),
-        'Nangka, Valenzuela',
-    )
-
-    report_id = f"VM-2026-{str(uuid.uuid4())[:4].upper()}"
-
-    report_data = {
-        'id': report_id,
-        'reporter_anonymous_id': request.reporter_id,
-        'issue_type': extracted.get('issue_type', 'other'),
-        'description': request.message,
-        'latitude': coordinates['lat'],
-        'longitude': coordinates['lng'],
-        'location_text': extracted.get('location_text'),
-        'urgency': extracted.get('urgency', 'medium'),
-        'sdg_tag': extracted.get('sdg_tag'),
-        'photo_url': request.photo_url,
-        'barangay': 'Nangka',
-        'status': 'received',
-    }
-
-    try:
-        _get_supabase().table('reports').insert(report_data).execute()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Database error: {str(e)}')
-
-    background_tasks.add_task(detect_clusters, 'Nangka')
-
-    return {
-        'success': True,
-        'report_id': report_id,
-        'chatbot_response': result['chatbot_response'],
-        'extracted_data': extracted,
-    }
 
 
 @router.get('/reports')
