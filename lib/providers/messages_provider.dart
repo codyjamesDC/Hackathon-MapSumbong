@@ -94,6 +94,8 @@ class MessagesProvider with ChangeNotifier {
         reporterId: reporterAnonymousId ?? 'ANON-DEV01',
         photoUrl: imageUrl,
         sessionId: _sessionId,
+        latitude: _capturedLat,
+        longitude: _capturedLng,
       );
 
       if (result['session_id'] != null) {
