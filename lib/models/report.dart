@@ -10,6 +10,7 @@ class Report {
   final double longitude;
   final String? locationText;
   final String barangay;
+  final String? purok;
   final String urgency;
   final String? sdgTag;
   final String status;
@@ -22,9 +23,7 @@ class Report {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  final String? purok;
-
-  Report({
+  const Report({
     required this.id,
     required this.reporterAnonymousId,
     required this.issueType,
@@ -50,101 +49,97 @@ class Report {
 
   factory Report.fromJson(Map<String, dynamic> json) {
     return Report(
-      id: json['id'],
-      reporterAnonymousId: json['reporter_anonymous_id'],
-      issueType: json['issue_type'],
-      description: json['description'],
-      photoUrl: json['photo_url'],
-      latitude: json['latitude'].toDouble(),
-      longitude: json['longitude'].toDouble(),
-      locationText: json['location_text'],
-      barangay: json['barangay'],
-      purok: json['purok'],
-      urgency: json['urgency'],
-      sdgTag: json['sdg_tag'],
-      status: json['status'],
-      resolutionNote: json['resolution_note'],
-      resolutionPhotoUrl: json['resolution_photo_url'],
-      residentConfirmed: json['resident_confirmed'],
+      id: json['id'] as String,
+      reporterAnonymousId: json['reporter_anonymous_id'] as String,
+      issueType: json['issue_type'] as String,
+      description: json['description'] as String,
+      photoUrl: json['photo_url'] as String?,
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+      locationText: json['location_text'] as String?,
+      barangay: json['barangay'] as String,
+      purok: json['purok'] as String?,
+      urgency: json['urgency'] as String,
+      sdgTag: json['sdg_tag'] as String?,
+      status: json['status'] as String,
+      resolutionNote: json['resolution_note'] as String?,
+      resolutionPhotoUrl: json['resolution_photo_url'] as String?,
+      residentConfirmed: json['resident_confirmed'] as bool?,
       resolvedAt: json['resolved_at'] != null
-          ? DateTime.parse(json['resolved_at'])
+          ? DateTime.parse(json['resolved_at'] as String)
           : null,
-      resolvedBy: json['resolved_by'],
-      isDeleted: json['is_deleted'],
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
+      resolvedBy: json['resolved_by'] as String?,
+      isDeleted: json['is_deleted'] as bool? ?? false,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: DateTime.parse(json['updated_at'] as String),
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'reporter_anonymous_id': reporterAnonymousId,
-      'issue_type': issueType,
-      'description': description,
-      'photo_url': photoUrl,
-      'latitude': latitude,
-      'longitude': longitude,
-      'location_text': locationText,
-      'barangay': barangay,
-      'purok': purok,
-      'urgency': urgency,
-      'sdg_tag': sdgTag,
-      'status': status,
-      'resolution_note': resolutionNote,
-      'resolution_photo_url': resolutionPhotoUrl,
-      'resident_confirmed': residentConfirmed,
-      'resolved_at': resolvedAt?.toIso8601String(),
-      'resolved_by': resolvedBy,
-      'is_deleted': isDeleted,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
-    };
-  }
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'reporter_anonymous_id': reporterAnonymousId,
+        'issue_type': issueType,
+        'description': description,
+        'photo_url': photoUrl,
+        'latitude': latitude,
+        'longitude': longitude,
+        'location_text': locationText,
+        'barangay': barangay,
+        'purok': purok,
+        'urgency': urgency,
+        'sdg_tag': sdgTag,
+        'status': status,
+        'resolution_note': resolutionNote,
+        'resolution_photo_url': resolutionPhotoUrl,
+        'resident_confirmed': residentConfirmed,
+        'resolved_at': resolvedAt?.toIso8601String(),
+        'resolved_by': resolvedBy,
+        'is_deleted': isDeleted,
+        'created_at': createdAt.toIso8601String(),
+        'updated_at': updatedAt.toIso8601String(),
+      };
 
-  // Helper methods
-  String getUrgencyLabel() {
-    const urgencyLabels = {
-      'critical': 'Kritikal',
-      'high': 'Mataas',
-      'medium': 'Katamtaman',
-      'low': 'Mababa'
-    };
-    return urgencyLabels[urgency] ?? urgency;
-  }
-
-  String getStatusLabel() {
-    const statusLabels = {
-      'received': 'Natanggap',
-      'in_progress': 'Pinoproseso',
-      'repair_scheduled': 'Nakaiskedyul',
-      'resolved': 'Nalutas',
-      'reopened': 'Muling Binuka'
-    };
-    return statusLabels[status] ?? status;
-  }
-
-  Color getUrgencyColor() {
-    const urgencyColors = {
-      'critical': Color(0xFFEF4444),  // Red
-      'high': Color(0xFFF59E0B),     // Orange
-      'medium': Color(0xFFFBBF24),   // Yellow
-      'low': Color(0xFF10B981),      // Green
-    };
-    return urgencyColors[urgency] ?? Colors.grey;
-  }
-
+  // ── Status helpers ────────────────────────────────────────────────────────
   bool get isResolved => status == 'resolved';
   bool get isInProgress => status == 'in_progress';
   bool get isCritical => urgency == 'critical';
 
-  // Getters for compatibility with UI
-  String get userId => reporterAnonymousId;
-  String? get category => issueType;
-  String? get priority => urgency;
+  // ── Display helpers ───────────────────────────────────────────────────────
+  String get urgencyLabel {
+    const labels = {
+      'critical': 'Kritikal',
+      'high': 'Mataas',
+      'medium': 'Katamtaman',
+      'low': 'Mababa',
+    };
+    return labels[urgency] ?? urgency;
+  }
+
+  String get statusLabel {
+    const labels = {
+      'received': 'Natanggap',
+      'in_progress': 'Pinoproseso',
+      'repair_scheduled': 'Nakaiskedyul',
+      'resolved': 'Nalutas',
+      'reopened': 'Muling Binuka',
+    };
+    return labels[status] ?? status;
+  }
+
+  Color get urgencyColor {
+    const colors = {
+      'critical': Color(0xFFEF4444),
+      'high': Color(0xFFF59E0B),
+      'medium': Color(0xFFFBBF24),
+      'low': Color(0xFF10B981),
+    };
+    return colors[urgency] ?? Colors.grey;
+  }
+
+  /// All photo URLs as a list (supports future multi-photo expansion).
   List<String> get imageUrls => photoUrl != null ? [photoUrl!] : [];
 
-  // CopyWith method
+  // ── copyWith ──────────────────────────────────────────────────────────────
   Report copyWith({
     String? id,
     String? reporterAnonymousId,
