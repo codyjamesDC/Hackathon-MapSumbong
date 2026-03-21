@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -6,9 +7,8 @@ class StorageService {
   static final SupabaseClient _supabase = Supabase.instance.client;
   static const String _bucket = 'photos';
 
-  /// Pick an image from [source] (camera or gallery), upload it to Supabase
-  /// storage, and return the public URL. Returns null if the user cancels
-  /// or if the upload fails.
+  /// Pick an image from [source], upload to Supabase storage,
+  /// and return the public URL. Returns null if cancelled or failed.
   static Future<String?> pickAndUpload({
     required ImageSource source,
     required String uploaderId,
@@ -17,7 +17,7 @@ class StorageService {
       final picker = ImagePicker();
       final picked = await picker.pickImage(
         source: source,
-        imageQuality: 75,   // compress to ~75% quality
+        imageQuality: 75,
         maxWidth: 1280,
         maxHeight: 1280,
       );
@@ -29,6 +29,7 @@ class StorageService {
         uploaderId: uploaderId,
       );
     } catch (e) {
+      debugPrint('StorageService.pickAndUpload error: $e');
       return null;
     }
   }
@@ -39,14 +40,19 @@ class StorageService {
     required String uploaderId,
   }) async {
     try {
+      // Build a unique file path: uploaderId/timestamp.ext
       final ext = file.path.split('.').last.toLowerCase();
+      final safeId = uploaderId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
       final fileName =
-          '$uploaderId/${DateTime.now().millisecondsSinceEpoch}.$ext';
+          '$safeId/${DateTime.now().millisecondsSinceEpoch}.$ext';
 
-      await _supabase.storage.from(_bucket).upload(
+      final bytes = await file.readAsBytes();
+
+      await _supabase.storage.from(_bucket).uploadBinary(
             fileName,
-            file,
-            fileOptions: const FileOptions(
+            bytes,
+            fileOptions: FileOptions(
+              contentType: 'image/$ext',
               cacheControl: '3600',
               upsert: false,
             ),
@@ -55,8 +61,10 @@ class StorageService {
       final publicUrl =
           _supabase.storage.from(_bucket).getPublicUrl(fileName);
 
+      debugPrint('StorageService: uploaded → $publicUrl');
       return publicUrl;
     } catch (e) {
+      debugPrint('StorageService.uploadFile error: $e');
       return null;
     }
   }
