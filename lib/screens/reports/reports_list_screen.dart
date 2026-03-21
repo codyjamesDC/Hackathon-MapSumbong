@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../widgets/report_card.dart';
+import '../../models/report.dart';
 
 class ReportsListScreen extends StatefulWidget {
   const ReportsListScreen({super.key});
@@ -15,19 +16,26 @@ class ReportsListScreen extends StatefulWidget {
 class _ReportsListScreenState extends State<ReportsListScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final List<String> _statusFilters = ['all', 'pending', 'in_progress', 'resolved'];
+
+  static const _tabs = [
+    (label: 'All', status: ''),
+    (label: 'Received', status: 'received'),
+    (label: 'In Progress', status: 'in_progress'),
+    (label: 'Resolved', status: 'resolved'),
+  ];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _statusFilters.length, vsync: this);
+    _tabController = TabController(length: _tabs.length, vsync: this);
 
-    // Load reports
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final reportsProvider = Provider.of<ReportsProvider>(context, listen: false);
 
-    if (authProvider.user?.id != null) {
-      reportsProvider.loadReports(userId: authProvider.user!.id);
+    // Use anonymousId — the key stored in the reports table
+    final anonymousId = authProvider.user?.anonymousId;
+    if (anonymousId != null) {
+      reportsProvider.loadReports(userId: anonymousId);
     }
   }
 
@@ -40,141 +48,103 @@ class _ReportsListScreenState extends State<ReportsListScreen>
   @override
   Widget build(BuildContext context) {
     final reportsProvider = Provider.of<ReportsProvider>(context);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Reports'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'All'),
-            Tab(text: 'Pending'),
-            Tab(text: 'In Progress'),
-            Tab(text: 'Resolved'),
-          ],
-        ),
+        title: const Text('My reports'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
-              if (authProvider.user?.id != null) {
-                reportsProvider.loadReports(userId: authProvider.user!.id);
-              }
+              final id = authProvider.user?.anonymousId;
+              if (id != null) reportsProvider.loadReports(userId: id);
             },
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabs: _tabs.map((t) => Tab(text: t.label)).toList(),
+        ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: _statusFilters.map((status) => _buildReportsList(status)).toList(),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCreateReportDialog(context),
-        child: const Icon(Icons.add),
+        children: _tabs
+            .map((t) => _ReportTabView(
+                  statusFilter: t.status,
+                  reportsProvider: reportsProvider,
+                  onRefresh: () {
+                    final id = authProvider.user?.anonymousId;
+                    if (id != null) reportsProvider.loadReports(userId: id);
+                  },
+                  onTap: (id) => context.go('/reports/$id'),
+                ))
+            .toList(),
       ),
     );
   }
+}
 
-  Widget _buildReportsList(String statusFilter) {
-    final reportsProvider = Provider.of<ReportsProvider>(context);
+// ── Tab content ───────────────────────────────────────────────────────────────
 
+class _ReportTabView extends StatelessWidget {
+  final String statusFilter;
+  final ReportsProvider reportsProvider;
+  final Future<void> Function() onRefresh;
+  final void Function(String reportId) onTap;
+
+  const _ReportTabView({
+    required this.statusFilter,
+    required this.reportsProvider,
+    required this.onRefresh,
+    required this.onTap,
+  });
+
+  List<Report> get _filtered {
+    if (statusFilter.isEmpty) return reportsProvider.reports;
+    return reportsProvider.getReportsByStatus(statusFilter);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     if (reportsProvider.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final filteredReports = statusFilter == 'all'
-        ? reportsProvider.reports
-        : reportsProvider.getReportsByStatus(statusFilter);
+    final items = _filtered;
 
-    if (filteredReports.isEmpty) {
-      return _buildEmptyState(statusFilter);
+    if (items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.report_problem_outlined,
+                size: 56, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(
+              statusFilter.isEmpty ? 'No reports yet' : 'No $statusFilter reports',
+              style:
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      );
     }
 
     return RefreshIndicator(
-      onRefresh: () async {
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        if (authProvider.user?.id != null) {
-          await reportsProvider.loadReports(userId: authProvider.user!.id);
-        }
-      },
+      onRefresh: onRefresh,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: filteredReports.length,
-        itemBuilder: (context, index) {
-          final report = filteredReports[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: ReportCard(
-              report: report,
-              onTap: () => context.go('/reports/${report.id}'),
-            ),
-          );
-        },
+        itemCount: items.length,
+        itemBuilder: (context, index) => Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: ReportCard(
+            report: items[index],
+            onTap: () => onTap(items[index].id),
+          ),
+        ),
       ),
-    );
-  }
-
-  Widget _buildEmptyState(String statusFilter) {
-    String message;
-    String subMessage;
-
-    switch (statusFilter) {
-      case 'pending':
-        message = 'No pending reports';
-        subMessage = 'Your submitted reports will appear here';
-        break;
-      case 'in_progress':
-        message = 'No reports in progress';
-        subMessage = 'Reports being worked on will appear here';
-        break;
-      case 'resolved':
-        message = 'No resolved reports';
-        subMessage = 'Completed reports will appear here';
-        break;
-      default:
-        message = 'No reports yet';
-        subMessage = 'Create your first disaster report';
-    }
-
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.report_problem_outlined,
-            size: 64,
-            color: Colors.grey,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subMessage,
-            style: const TextStyle(color: Colors.grey),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          if (statusFilter == 'all')
-            ElevatedButton(
-              onPressed: () => _showCreateReportDialog(context),
-              child: const Text('Create Report'),
-            ),
-        ],
-      ),
-    );
-  }
-
-  void _showCreateReportDialog(BuildContext context) {
-    // This will be implemented when we create the report creation screen
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Report creation coming soon!')),
     );
   }
 }
