@@ -92,18 +92,42 @@ async def process_message(payload: dict):
     """
     Multi-turn AI conversation that extracts a structured report.
 
-    Payload:  { message, reporter_id?, session_id? }
+    Payload:  { message, reporter_id?, session_id?, latitude?, longitude? }
     Returns:  { success, session_id, response, is_complete, report_data }
     """
     try:
         user_message = payload.get('message', '').strip()
         session_id = payload.get('session_id') or str(uuid.uuid4())
+        latitude = payload.get('latitude')
+        longitude = payload.get('longitude')
 
         if not user_message:
             raise HTTPException(status_code=400, detail='message is required')
 
         if session_id not in sessions:
             sessions[session_id] = []
+
+            # On the FIRST turn only, if GPS coords were provided,
+            # reverse-geocode them and inject location context so Gemini
+            # never needs to ask for the barangay.
+            if latitude and longitude:
+                location_info = await _reverse_geocode(latitude, longitude)
+                if location_info:
+                    # Prepend a hidden system note to the conversation
+                    # so Gemini already knows the location
+                    location_context = (
+                        f"[SYSTEM: The resident's GPS location has been captured. "
+                        f"Coordinates: {latitude:.5f}, {longitude:.5f}. "
+                        f"Address: {location_info}. "
+                        f"Use this as the location — do NOT ask for barangay or address.]"
+                    )
+                    sessions[session_id] = [{
+                        'role': 'user',
+                        'parts': [location_context]
+                    }, {
+                        'role': 'model',
+                        'parts': ['Noted. I have the location from GPS.']
+                    }]
 
         history = sessions[session_id]
 
@@ -139,6 +163,11 @@ async def process_message(payload: dict):
         is_complete = False
         if len(history) >= 6:
             report_data, is_complete = await _extract_report_data(history)
+
+        # Always inject GPS into report_data if provided
+        if report_data and latitude and longitude:
+            report_data['latitude'] = report_data.get('latitude') or latitude
+            report_data['longitude'] = report_data.get('longitude') or longitude
 
         return {
             'success': True,
@@ -195,7 +224,43 @@ async def _extract_report_data(history: list) -> tuple[dict | None, bool]:
         return None, False
 
 
-# ── Nominatim geocoding ────────────────────────────────────────────────────────
+# ── Nominatim reverse geocoding ───────────────────────────────────────────────
+
+async def _reverse_geocode(lat: float, lng: float) -> str | None:
+    """Convert GPS coordinates to a human-readable address string."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                'https://nominatim.openstreetmap.org/reverse',
+                params={
+                    'lat': lat,
+                    'lon': lng,
+                    'format': 'json',
+                    'addressdetails': 1,
+                },
+                headers={'User-Agent': 'MapSumbong/1.0'},
+            )
+            data = resp.json()
+
+        address = data.get('address', {})
+        parts = []
+
+        # Build address from most specific to least
+        for key in ['village', 'suburb', 'city_district', 'quarter',
+                    'neighbourhood', 'city', 'municipality', 'province']:
+            val = address.get(key)
+            if val:
+                parts.append(val)
+            if len(parts) >= 3:
+                break
+
+        return ', '.join(parts) if parts else data.get('display_name', '')
+    except Exception as e:
+        print(f'Reverse geocode error: {e}')
+        return None
+
+
+# ── Nominatim forward geocoding ────────────────────────────────────────────────
 
 async def _geocode(location_text: str) -> dict | None:
     try:
