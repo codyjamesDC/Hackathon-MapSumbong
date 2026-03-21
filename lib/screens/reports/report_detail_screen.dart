@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/reports_provider.dart';
 import '../../models/report.dart';
 
@@ -20,9 +21,10 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   @override
   void initState() {
     super.initState();
-    // Load the specific report
-    Provider.of<ReportsProvider>(context, listen: false)
-        .selectReport(widget.reportId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<ReportsProvider>(context, listen: false)
+          .selectReport(widget.reportId);
+    });
   }
 
   @override
@@ -40,18 +42,31 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     if (report == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Report Details')),
-        body: const Center(
-          child: Text('Report not found'),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text('Report not found'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => context.go('/reports'),
+                child: const Text('Back to reports'),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Report Details'),
+        title: Text('Report ${report.id}'),
         actions: [
           IconButton(
             icon: const Icon(Icons.chat),
+            tooltip: 'Chat with authorities',
             onPressed: () => context.go('/chat/${report.id}'),
           ),
         ],
@@ -62,197 +77,401 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Status banner
-            _buildStatusBanner(report.status),
+            _StatusBanner(status: report.status),
+            const SizedBox(height: 20),
 
-            const SizedBox(height: 16),
-
-            // Report details
-            _buildDetailSection('Description', report.description),
-
-            if (report.category != null)
-              _buildDetailSection('Category', _formatCategory(report.category!)),
-
-            if (report.priority != null)
-              _buildDetailSection('Priority', _formatPriority(report.priority!)),
-
-            _buildDetailSection('Location',
-                '${report.barangay ?? 'Unknown'}, ${report.purok ?? 'Unknown'}'),
-
-            _buildDetailSection('Coordinates',
-                '${report.latitude?.toStringAsFixed(6) ?? 'N/A'}, ${report.longitude?.toStringAsFixed(6) ?? 'N/A'}'),
-
-            _buildDetailSection('Reported At', _formatDateTime(report.createdAt)),
-
-            if (report.updatedAt != null)
-              _buildDetailSection('Last Updated', _formatDateTime(report.updatedAt!)),
-
-            // Images section
-            if (report.imageUrls.isNotEmpty) ...[
-              const SizedBox(height: 24),
-              const Text(
-                'Photos',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+            // Issue type + urgency row
+            Row(
+              children: [
+                _InfoChip(
+                  label: _formatIssueType(report.issueType),
+                  color: Colors.blue,
+                  icon: _issueIcon(report.issueType),
                 ),
+                const SizedBox(width: 8),
+                _InfoChip(
+                  label: report.urgencyLabel,
+                  color: report.urgencyColor,
+                  icon: Icons.warning_amber,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // Description
+            _SectionLabel('Description'),
+            const SizedBox(height: 6),
+            Text(report.description, style: const TextStyle(fontSize: 15)),
+
+            const SizedBox(height: 20),
+
+            // Location
+            _SectionLabel('Location'),
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.location_on, size: 18, color: Colors.grey),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    [
+                      if (report.locationText != null) report.locationText!,
+                      report.barangay,
+                      if (report.purok != null) 'Purok ${report.purok}',
+                    ].join(', '),
+                    style: const TextStyle(fontSize: 15),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'GPS: ${report.latitude.toStringAsFixed(6)}, '
+              '${report.longitude.toStringAsFixed(6)}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Timestamps
+            _SectionLabel('Timeline'),
+            const SizedBox(height: 6),
+            _TimelineRow('Reported', report.createdAt),
+            if (report.resolvedAt != null)
+              _TimelineRow('Resolved', report.resolvedAt!),
+
+            // SDG tag
+            if (report.sdgTag != null) ...[
+              const SizedBox(height: 20),
+              _SectionLabel('SDG Tag'),
+              const SizedBox(height: 6),
+              _InfoChip(
+                label: report.sdgTag!,
+                color: Colors.green,
+                icon: Icons.public,
               ),
-              const SizedBox(height: 12),
-              _buildImageGallery(report.imageUrls),
             ],
 
-            // Action buttons
+            // Photos
+            if (report.imageUrls.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              _SectionLabel('Photos'),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 200,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: report.imageUrls.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, i) => ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CachedNetworkImage(
+                      imageUrl: report.imageUrls[i],
+                      width: 200,
+                      height: 200,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(
+                        width: 200,
+                        height: 200,
+                        color: Colors.grey[200],
+                        child: const Center(
+                            child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        width: 200,
+                        height: 200,
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.broken_image, size: 48),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+
+            // Resolution
+            if (report.resolutionNote != null) ...[
+              const SizedBox(height: 24),
+              _SectionLabel('Resolution'),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.check_circle,
+                            color: Colors.green, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          report.resolvedBy ?? 'Barangay officials',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.green,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(report.resolutionNote!),
+                  ],
+                ),
+              ),
+            ],
+
             const SizedBox(height: 32),
-            _buildActionButtons(report),
+
+            // Action buttons
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => context.go('/chat/${report.id}'),
+                icon: const Icon(Icons.chat),
+                label: const Text('Chat with Authorities'),
+                style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+              ),
+            ),
+
+            if (report.isResolved) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _showReopenDialog(context, report),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Issue Still Exists? Reopen'),
+                  style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14)),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _shareReport(context, report),
+                icon: const Icon(Icons.share),
+                label: const Text('Share Report'),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatusBanner(String status) {
-    Color color;
-    String label;
-    IconData icon;
+  void _showReopenDialog(BuildContext context, Report report) {
+    final reasonCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reopen Report'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Please describe why the issue still exists:'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'e.g. Baha pa rin sa kanto namin...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (reasonCtrl.text.trim().isEmpty) return;
+              Navigator.pop(ctx);
+              final provider =
+                  Provider.of<ReportsProvider>(context, listen: false);
+              await provider.updateReportStatus(report.id, 'reopened');
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Report reopened.')),
+                );
+              }
+            },
+            child: const Text('Reopen'),
+          ),
+        ],
+      ),
+    );
+  }
 
-    switch (status.toLowerCase()) {
-      case 'pending':
-        color = Colors.orange;
-        label = 'Pending Review';
-        icon = Icons.schedule;
-        break;
-      case 'in_progress':
-        color = Colors.blue;
-        label = 'In Progress';
-        icon = Icons.engineering;
-        break;
-      case 'repair_scheduled':
-        color = Colors.purple;
-        label = 'Repair Scheduled';
-        icon = Icons.calendar_today;
-        break;
-      case 'resolved':
-        color = Colors.green;
-        label = 'Resolved';
-        icon = Icons.check_circle;
-        break;
+  void _shareReport(BuildContext context, Report report) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Report ID: ${report.id} — share this with your neighbors'),
+      ),
+    );
+  }
+
+  String _formatIssueType(String type) => type
+      .split('_')
+      .map((w) => w[0].toUpperCase() + w.substring(1))
+      .join(' ');
+
+  IconData _issueIcon(String type) {
+    switch (type) {
+      case 'flood':
+        return Icons.water;
+      case 'fire':
+        return Icons.local_fire_department;
+      case 'road':
+      case 'pothole':
+        return Icons.construction;
+      case 'power':
+      case 'broken_streetlight':
+        return Icons.bolt;
+      case 'waste':
+      case 'garbage':
+        return Icons.delete;
+      case 'water':
+        return Icons.water_drop;
+      case 'emergency':
+        return Icons.emergency;
       default:
-        color = Colors.grey;
-        label = status;
-        icon = Icons.info;
+        return Icons.report_problem;
     }
+  }
+}
+
+// ── Private helpers ───────────────────────────────────────────────────────────
+
+class _StatusBanner extends StatelessWidget {
+  final String status;
+  const _StatusBanner({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, label, icon) = switch (status.toLowerCase()) {
+      'received' => (Colors.blue, 'Received — awaiting review', Icons.inbox),
+      'in_progress' => (
+          Colors.orange,
+          'In Progress — being handled',
+          Icons.engineering
+        ),
+      'repair_scheduled' => (
+          Colors.purple,
+          'Repair Scheduled',
+          Icons.calendar_today
+        ),
+      'resolved' => (Colors.green, 'Resolved ✓', Icons.check_circle),
+      'reopened' => (Colors.red, 'Reopened — under review', Icons.refresh),
+      _ => (Colors.grey, status, Icons.info),
+    };
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withOpacity(0.35)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 24),
+          Icon(icon, color: color, size: 22),
           const SizedBox(width: 12),
           Text(
             label,
             style: TextStyle(
-              color: color,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
+                color: color, fontSize: 15, fontWeight: FontWeight.w500),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildDetailSection(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+          fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  final IconData icon;
+  const _InfoChip(
+      {required this.label, required this.color, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 16,
-            ),
-          ),
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12, color: color, fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
+}
 
-  Widget _buildImageGallery(List<String> imageUrls) {
-    return SizedBox(
-      height: 200,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: imageUrls.length,
-        itemBuilder: (context, index) {
-          return Container(
-            width: 200,
-            margin: const EdgeInsets.only(right: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              image: DecorationImage(
-                image: NetworkImage(imageUrls[index]),
-                fit: BoxFit.cover,
-              ),
-            ),
-          );
-        },
+class _TimelineRow extends StatelessWidget {
+  final String label;
+  final DateTime dt;
+  const _TimelineRow(this.label, this.dt);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 70,
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w500)),
+          ),
+          Text(
+            '${dt.day}/${dt.month}/${dt.year} '
+            '${dt.hour.toString().padLeft(2, '0')}:'
+            '${dt.minute.toString().padLeft(2, '0')}',
+            style: const TextStyle(fontSize: 13),
+          ),
+        ],
       ),
     );
-  }
-
-  Widget _buildActionButtons(Report report) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ElevatedButton.icon(
-          onPressed: () => context.go('/chat/${report.id}'),
-          icon: const Icon(Icons.chat),
-          label: const Text('Chat with Authorities'),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-          ),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () => _shareReport(report),
-          icon: const Icon(Icons.share),
-          label: const Text('Share Report'),
-        ),
-      ],
-    );
-  }
-
-  void _shareReport(Report report) {
-    // Implement share functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Share functionality coming soon!')),
-    );
-  }
-
-  String _formatCategory(String category) {
-    return category.split('_').map((word) =>
-        word[0].toUpperCase() + word.substring(1)).join(' ');
-  }
-
-  String _formatPriority(String priority) {
-    return priority[0].toUpperCase() + priority.substring(1);
-  }
-
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }
