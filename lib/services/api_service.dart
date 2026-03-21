@@ -1,48 +1,66 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/report.dart';
 import '../models/message.dart';
 
 class ApiService {
-  // Read from .env — falls back to Android emulator address
   static String get baseUrl =>
       dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000';
 
-  static const Duration _timeout = Duration(seconds: 30);
+  // Gemini 2.5 Flash can take 30-60s on free tier — use 90s to be safe
+  static const Duration _timeout = Duration(seconds: 90);
 
-  // ── Process a message with Gemini AI and (optionally) create a report ──────
+  // ── Process message with Gemini AI ────────────────────────────────────────
   static Future<Map<String, dynamic>> processMessage({
     required String message,
     required String reporterId,
     String? photoUrl,
     String? sessionId,
   }) async {
-    final response = await http
-        .post(
-          Uri.parse('$baseUrl/process-message'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'message': message,
-            'reporter_id': reporterId,
-            if (photoUrl != null) 'photo_url': photoUrl,
-            if (sessionId != null) 'session_id': sessionId,
-          }),
-        )
-        .timeout(_timeout);
+    debugPrint('ApiService: POST $baseUrl/process-message');
 
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/process-message'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'message': message,
+              'reporter_id': reporterId,
+              if (photoUrl != null) 'photo_url': photoUrl,
+              if (sessionId != null) 'session_id': sessionId,
+            }),
+          )
+          .timeout(
+            _timeout,
+            onTimeout: () => throw Exception(
+              'The AI is taking too long to respond. '
+              'Please check your internet connection and try again.',
+            ),
+          );
+
+      debugPrint('ApiService: response ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      throw Exception(
+          'Server error ${response.statusCode}: ${response.body}');
+    } catch (e) {
+      debugPrint('ApiService.processMessage error: $e');
+      rethrow;
     }
-    throw Exception(
-        'processMessage failed: ${response.statusCode} ${response.body}');
   }
 
-  // ── Submit a fully-extracted report to Supabase via backend ────────────────
+  // ── Submit confirmed report ───────────────────────────────────────────────
   static Future<Map<String, dynamic>> submitReport({
     required Map<String, dynamic> reportData,
     required String reporterAnonymousId,
   }) async {
+    debugPrint('ApiService: POST $baseUrl/submit-report');
+
     final response = await http
         .post(
           Uri.parse('$baseUrl/submit-report'),
@@ -61,7 +79,7 @@ class ApiService {
         'submitReport failed: ${response.statusCode} ${response.body}');
   }
 
-  // ── Get reports list ────────────────────────────────────────────────────────
+  // ── Get reports list ──────────────────────────────────────────────────────
   static Future<List<Map<String, dynamic>>> getReports({
     String? status,
     String? barangay,
@@ -81,7 +99,8 @@ class ApiService {
 
     final uri = Uri.parse('$baseUrl/reports')
         .replace(queryParameters: queryParams);
-    final response = await http.get(uri).timeout(_timeout);
+    final response =
+        await http.get(uri).timeout(_timeout);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -92,7 +111,7 @@ class ApiService {
         'getReports failed: ${response.statusCode} ${response.body}');
   }
 
-  // ── Get single report ───────────────────────────────────────────────────────
+  // ── Get single report ─────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getReport(String reportId) async {
     final response = await http
         .get(Uri.parse('$baseUrl/reports/$reportId'))
@@ -105,7 +124,7 @@ class ApiService {
         'getReport failed: ${response.statusCode} ${response.body}');
   }
 
-  // ── Update report status ───────────────────────────────────────────────────
+  // ── Update report status ──────────────────────────────────────────────────
   static Future<Map<String, dynamic>> updateReportStatus({
     required String reportId,
     required String status,
@@ -134,20 +153,18 @@ class ApiService {
         'updateReportStatus failed: ${response.statusCode} ${response.body}');
   }
 
-  // ── Legacy wrappers kept so other files still compile ─────────────────────
+  // ── Legacy wrappers ───────────────────────────────────────────────────────
 
   static Future<Report> submitReportModel(Report report) async {
     final result = await submitReport(
       reportData: report.toJson(),
       reporterAnonymousId: report.reporterAnonymousId,
     );
-    // Backend returns {success, report_id, message} — re-fetch full report
     final fetched = await getReport(result['report_id'] as String);
     return Report.fromJson(fetched);
   }
 
   static Future<Message> sendMessage(Message message) async {
-    // Direct message save — not used in the AI flow, kept for authority chat
     final response = await http
         .post(
           Uri.parse('$baseUrl/send-message'),
