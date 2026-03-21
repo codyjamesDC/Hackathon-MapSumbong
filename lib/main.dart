@@ -14,6 +14,7 @@ import 'screens/reports/reports_list_screen.dart';
 import 'screens/reports/report_detail_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'screens/map/map_screen.dart';
+import 'screens/location/location_picker_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -61,7 +62,7 @@ GoRouter _buildRouter() {
       final authProvider =
           Provider.of<AuthProvider>(context, listen: false);
       final isAuthenticated = authProvider.isAuthenticated;
-      final path = state.uri.path; // ← fixed: GoRouter v17 uses uri.path
+      final path = state.uri.path;
 
       final isAuthRoute =
           path.startsWith('/auth') || path.startsWith('/otp');
@@ -107,6 +108,12 @@ GoRouter _buildRouter() {
       GoRoute(
         path: '/map',
         builder: (context, state) => const MapScreen(),
+      ),
+      // Location picker — navigated to imperatively via Navigator.push
+      // so it can return a LatLng value back to the caller
+      GoRoute(
+        path: '/pick-location',
+        builder: (context, state) => const LocationPickerScreen(),
       ),
     ],
   );
