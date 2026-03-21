@@ -3,8 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/reports_provider.dart';
-import '../../widgets/report_card.dart';
 import '../../models/report.dart';
+import '../../widgets/report_card.dart';
+import '../chat/chat_screen.dart';
 
 class ReportsListScreen extends StatefulWidget {
   const ReportsListScreen({super.key});
@@ -19,23 +20,26 @@ class _ReportsListScreenState extends State<ReportsListScreen>
 
   static const _tabs = [
     (label: 'All', status: ''),
-    (label: 'Received', status: 'received'),
+    (label: 'Pending', status: 'received'),
     (label: 'In Progress', status: 'in_progress'),
     (label: 'Resolved', status: 'resolved'),
+    (label: 'Reopened', status: 'reopened'),
   ];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadReports());
+  }
 
+  void _loadReports() {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final reportsProvider = Provider.of<ReportsProvider>(context, listen: false);
-
-    // Use anonymousId — the key stored in the reports table
-    final anonymousId = authProvider.user?.anonymousId;
-    if (anonymousId != null) {
-      reportsProvider.loadReports(userId: anonymousId);
+    final reportsProvider =
+        Provider.of<ReportsProvider>(context, listen: false);
+    final id = authProvider.user?.anonymousId;
+    if (id != null) {
+      reportsProvider.loadReports(userId: id);
     }
   }
 
@@ -52,20 +56,39 @@ class _ReportsListScreenState extends State<ReportsListScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My reports'),
+        title: const Text('My Reports'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () {
-              final id = authProvider.user?.anonymousId;
-              if (id != null) reportsProvider.loadReports(userId: id);
-            },
+            onPressed: _loadReports,
+          ),
+          IconButton(
+            icon: const Icon(Icons.map),
+            onPressed: () => context.go('/map'),
           ),
         ],
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
-          tabs: _tabs.map((t) => Tab(text: t.label)).toList(),
+          tabAlignment: TabAlignment.start,
+          tabs: _tabs
+              .map((t) => Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(t.label),
+                        if (_countFor(reportsProvider.reports, t.status) > 0)
+                          ...[
+                          const SizedBox(width: 6),
+                          _CountBadge(
+                            count: _countFor(
+                                reportsProvider.reports, t.status),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ))
+              .toList(),
         ),
       ),
       body: TabBarView(
@@ -74,24 +97,78 @@ class _ReportsListScreenState extends State<ReportsListScreen>
             .map((t) => _ReportTabView(
                   statusFilter: t.status,
                   reportsProvider: reportsProvider,
-                  onRefresh: () {
-                    final id = authProvider.user?.anonymousId;
-                    if (id != null) reportsProvider.loadReports(userId: id);
-                  },
+                  onRefresh: _loadReports,
                   onTap: (id) => context.go('/reports/$id'),
                 ))
             .toList(),
+      ),
+      // New report via the chat flow
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showNewReportDialog(context),
+        icon: const Icon(Icons.add),
+        label: const Text('New Report'),
+      ),
+    );
+  }
+
+  int _countFor(List<Report> reports, String status) {
+    if (status.isEmpty) return reports.length;
+    return reports.where((r) => r.status == status).length;
+  }
+
+  void _showNewReportDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Create New Report',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Reports are created by chatting with our AI assistant. '
+              'Describe the issue in Filipino, Taglish, or English.',
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                // Navigate to the chat screen for a new report session.
+                // The backend generates the report ID from the conversation.
+                context.go('/chat/new');
+              },
+              icon: const Icon(Icons.chat),
+              label: const Text('Start Reporting via Chat'),
+              style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14)),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// ── Tab content ───────────────────────────────────────────────────────────────
+// ── Tab view ──────────────────────────────────────────────────────────────────
 
 class _ReportTabView extends StatelessWidget {
   final String statusFilter;
   final ReportsProvider reportsProvider;
-  final Future<void> Function() onRefresh;
+  final VoidCallback onRefresh;
   final void Function(String reportId) onTap;
 
   const _ReportTabView({
@@ -119,13 +196,28 @@ class _ReportTabView extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.report_problem_outlined,
-                size: 56, color: Colors.grey),
+            Icon(
+              statusFilter.isEmpty
+                  ? Icons.report_problem_outlined
+                  : Icons.inbox_outlined,
+              size: 56,
+              color: Colors.grey[400],
+            ),
             const SizedBox(height: 16),
             Text(
-              statusFilter.isEmpty ? 'No reports yet' : 'No $statusFilter reports',
-              style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+              statusFilter.isEmpty
+                  ? 'No reports yet'
+                  : 'No $statusFilter reports',
+              style: const TextStyle(
+                  fontSize: 17, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              statusFilter.isEmpty
+                  ? 'Tap the + button to create your first report'
+                  : 'Reports with this status will appear here',
+              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -133,9 +225,9 @@ class _ReportTabView extends StatelessWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: onRefresh,
+      onRefresh: () async => onRefresh(),
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
         itemCount: items.length,
         itemBuilder: (context, index) => Padding(
           padding: const EdgeInsets.only(bottom: 8),
@@ -144,6 +236,29 @@ class _ReportTabView extends StatelessWidget {
             onTap: () => onTap(items[index].id),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Badge ─────────────────────────────────────────────────────────────────────
+
+class _CountBadge extends StatelessWidget {
+  final int count;
+  const _CountBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Theme.of(context).primaryColor,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        count.toString(),
+        style:
+            const TextStyle(color: Colors.white, fontSize: 10),
       ),
     );
   }
