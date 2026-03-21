@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../models/report.dart';
+import '../models/report.dart';
 
 class ReportCard extends StatelessWidget {
   final Report report;
@@ -15,6 +15,7 @@ class ReportCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -23,30 +24,24 @@ class ReportCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Status and timestamp
+              // Status + timestamp row
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildStatusChip(report.status),
+                  _StatusChip(status: report.status),
                   Text(
                     _formatTimestamp(report.createdAt),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],
               ),
 
               const SizedBox(height: 12),
 
-              // Title/Description
+              // Description
               Text(
                 report.description,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -54,87 +49,45 @@ class ReportCard extends StatelessWidget {
               const SizedBox(height: 8),
 
               // Location
-              if (report.barangay != null) ...[
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on,
-                      size: 16,
-                      color: Colors.grey,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${report.barangay}${report.purok != null ? ', ${report.purok}' : ''}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-
-              const SizedBox(height: 8),
-
-              // Category and priority
               Row(
                 children: [
-                  if (report.category != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _getCategoryColor(report.category!).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        report.category!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _getCategoryColor(report.category!),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                  const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      [report.barangay, report.purok]
+                          .whereType<String>()
+                          .join(', '),
+                      style: const TextStyle(fontSize: 14, color: Colors.grey),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(width: 8),
-                  ],
-
-                  if (report.priority != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _getPriorityColor(report.priority!).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        report.priority!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _getPriorityColor(report.priority!),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ],
               ),
 
-              // Images indicator
+              const SizedBox(height: 8),
+
+              // Issue type + urgency chips
+              Wrap(
+                spacing: 8,
+                children: [
+                  _CategoryChip(issueType: report.issueType),
+                  _UrgencyChip(urgency: report.urgency, label: report.urgencyLabel),
+                ],
+              ),
+
+              // Photo count
               if (report.imageUrls.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Icon(
-                      Icons.photo,
-                      size: 16,
-                      color: Colors.grey,
-                    ),
+                    const Icon(Icons.photo, size: 16, color: Colors.grey),
                     const SizedBox(width: 4),
                     Text(
-                      '${report.imageUrls.length} photo${report.imageUrls.length > 1 ? 's' : ''}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                      ),
+                      '${report.imageUrls.length} '
+                      'photo${report.imageUrls.length > 1 ? 's' : ''}',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -146,31 +99,68 @@ class ReportCard extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusChip(String status) {
-    Color color;
-    String label;
+  String _formatTimestamp(DateTime timestamp) {
+    final diff = DateTime.now().difference(timestamp);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'Just now';
+  }
+}
 
-    switch (status.toLowerCase()) {
-      case 'pending':
-        color = Colors.orange;
-        label = 'Pending';
-        break;
-      case 'in_progress':
-        color = Colors.blue;
-        label = 'In Progress';
-        break;
-      case 'repair_scheduled':
-        color = Colors.purple;
-        label = 'Repair Scheduled';
-        break;
-      case 'resolved':
-        color = Colors.green;
-        label = 'Resolved';
-        break;
-      default:
-        color = Colors.grey;
-        label = status;
-    }
+// ── Small private chips ───────────────────────────────────────────────────────
+
+class _StatusChip extends StatelessWidget {
+  final String status;
+  const _StatusChip({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, label) = switch (status.toLowerCase()) {
+      'received' => (Colors.blue, 'Received'),
+      'in_progress' => (Colors.orange, 'In Progress'),
+      'repair_scheduled' => (Colors.purple, 'Scheduled'),
+      'resolved' => (Colors.green, 'Resolved'),
+      'reopened' => (Colors.red, 'Reopened'),
+      _ => (Colors.grey, status),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  final String issueType;
+  const _CategoryChip({required this.issueType});
+
+  static Color _colorFor(String type) => switch (type.toLowerCase()) {
+        'flood' => Colors.blue,
+        'fire' => Colors.red,
+        'road' || 'pothole' => Colors.grey,
+        'power' || 'broken_streetlight' => Colors.amber,
+        'waste' || 'garbage' => Colors.brown,
+        'water' => Colors.cyan,
+        'emergency' => Colors.red,
+        _ => Colors.blueGrey,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _colorFor(issueType);
+    final label = issueType
+        .split('_')
+        .map((w) => w[0].toUpperCase() + w.substring(1))
+        .join(' ');
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -180,63 +170,38 @@ class ReportCard extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontSize: 12,
-          color: color,
-          fontWeight: FontWeight.w500,
-        ),
+        style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w500),
       ),
     );
   }
+}
 
-  Color _getCategoryColor(String category) {
-    switch (category.toLowerCase()) {
-      case 'flood':
-        return Colors.blue;
-      case 'fire':
-        return Colors.red;
-      case 'earthquake':
-        return Colors.brown;
-      case 'typhoon':
-        return Colors.cyan;
-      case 'landslide':
-        return Colors.orange;
-      case 'power_outage':
-        return Colors.yellow;
-      case 'road_damage':
-        return Colors.grey;
-      default:
-        return Colors.blueGrey;
-    }
-  }
+class _UrgencyChip extends StatelessWidget {
+  final String urgency;
+  final String label;
+  const _UrgencyChip({required this.urgency, required this.label});
 
-  Color _getPriorityColor(String priority) {
-    switch (priority.toLowerCase()) {
-      case 'critical':
-        return Colors.red;
-      case 'high':
-        return Colors.orange;
-      case 'medium':
-        return Colors.yellow;
-      case 'low':
-        return Colors.green;
-      default:
-        return Colors.grey;
-    }
-  }
+  static Color _colorFor(String u) => switch (u) {
+        'critical' => const Color(0xFFEF4444),
+        'high' => const Color(0xFFF59E0B),
+        'medium' => const Color(0xFFFBBF24),
+        'low' => const Color(0xFF10B981),
+        _ => Colors.grey,
+      };
 
-  String _formatTimestamp(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-
-    if (difference.inDays > 0) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'Just now';
-    }
+  @override
+  Widget build(BuildContext context) {
+    final color = _colorFor(urgency);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w500),
+      ),
+    );
   }
 }
