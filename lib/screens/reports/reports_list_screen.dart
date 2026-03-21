@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/messages_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../models/report.dart';
 import '../../widgets/report_card.dart';
-import '../chat/chat_screen.dart';
+import '../../screens/location/location_picker_screen.dart';
 
 class ReportsListScreen extends StatefulWidget {
   const ReportsListScreen({super.key});
@@ -49,10 +51,35 @@ class _ReportsListScreenState extends State<ReportsListScreen>
     super.dispose();
   }
 
+  // ── New report flow ───────────────────────────────────────────────────────
+  // 1. Open location picker → user drops pin
+  // 2. Store GPS in MessagesProvider
+  // 3. Navigate to chat/new
+
+  Future<void> _startNewReport() async {
+    // Push location picker and wait for the result (a LatLng or null)
+    final LatLng? picked = await Navigator.of(context).push<LatLng>(
+      MaterialPageRoute(
+        builder: (_) => const LocationPickerScreen(),
+        fullscreenDialog: true,
+      ),
+    );
+
+    if (!mounted) return;
+
+    // Store coordinates (even if null — chat will still work via geocoding)
+    if (picked != null) {
+      Provider.of<MessagesProvider>(context, listen: false)
+          .setGpsCoordinates(picked.latitude, picked.longitude);
+    }
+
+    // Navigate to new report chat
+    context.go('/chat/new');
+  }
+
   @override
   Widget build(BuildContext context) {
     final reportsProvider = Provider.of<ReportsProvider>(context);
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     return Scaffold(
       appBar: AppBar(
@@ -102,10 +129,9 @@ class _ReportsListScreenState extends State<ReportsListScreen>
                 ))
             .toList(),
       ),
-      // New report via the chat flow
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showNewReportDialog(context),
-        icon: const Icon(Icons.add),
+        onPressed: _startNewReport,
+        icon: const Icon(Icons.add_location_alt),
         label: const Text('New Report'),
       ),
     );
@@ -114,52 +140,6 @@ class _ReportsListScreenState extends State<ReportsListScreen>
   int _countFor(List<Report> reports, String status) {
     if (status.isEmpty) return reports.length;
     return reports.where((r) => r.status == status).length;
-  }
-
-  void _showNewReportDialog(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Create New Report',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Reports are created by chatting with our AI assistant. '
-              'Describe the issue in Filipino, Taglish, or English.',
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(ctx);
-                // Navigate to the chat screen for a new report session.
-                // The backend generates the report ID from the conversation.
-                context.go('/chat/new');
-              },
-              icon: const Icon(Icons.chat),
-              label: const Text('Start Reporting via Chat'),
-              style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14)),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -207,7 +187,7 @@ class _ReportTabView extends StatelessWidget {
             Text(
               statusFilter.isEmpty
                   ? 'No reports yet'
-                  : 'No $statusFilter reports',
+                  : 'No ${statusFilter.replaceAll('_', ' ')} reports',
               style: const TextStyle(
                   fontSize: 17, fontWeight: FontWeight.w500),
             ),
@@ -257,8 +237,7 @@ class _CountBadge extends StatelessWidget {
       ),
       child: Text(
         count.toString(),
-        style:
-            const TextStyle(color: Colors.white, fontSize: 10),
+        style: const TextStyle(color: Colors.white, fontSize: 10),
       ),
     );
   }
