@@ -45,18 +45,29 @@ class ReportsProvider with ChangeNotifier {
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
-  Future<Report> submitReport(Report report) async {
+  // Uses ApiService.submitReport which takes named params and returns
+  // Map<String, dynamic> — then re-fetches the full Report from Supabase.
+  Future<Report?> submitReport(Report report) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final submitted = await ApiService.submitReport(report);
-      _reports.insert(0, submitted);
-      return submitted;
+      final result = await ApiService.submitReport(
+        reportData: report.toJson(),
+        reporterAnonymousId: report.reporterAnonymousId,
+      );
+
+      final reportId = result['report_id'] as String?;
+      if (reportId == null) throw Exception('No report_id in response');
+
+      // Re-fetch the saved report so we have all server-generated fields
+      final saved = await SupabaseService.getReportById(reportId);
+      _reports.insert(0, saved);
+      return saved;
     } catch (e) {
       _error = e.toString();
-      rethrow;
+      return null;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -112,7 +123,6 @@ class ReportsProvider with ChangeNotifier {
   // ── Real-time subscriptions ───────────────────────────────────────────────
   StreamSubscription? _reportsSubscription;
 
-  /// Subscribe to updates for a specific user's reports.
   void subscribeToReportUpdates(String reporterAnonymousId) {
     _reportsSubscription?.cancel();
     _reportsSubscription =
@@ -125,7 +135,6 @@ class ReportsProvider with ChangeNotifier {
     });
   }
 
-  /// Subscribe to all reports (for officials / admin views).
   void subscribeToAllReports() {
     _reportsSubscription?.cancel();
     _reportsSubscription =
