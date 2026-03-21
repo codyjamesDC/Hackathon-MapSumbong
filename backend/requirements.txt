@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 supabase
-google-generativeai
+google-genai
 openai
 python-dotenv
 httpx
