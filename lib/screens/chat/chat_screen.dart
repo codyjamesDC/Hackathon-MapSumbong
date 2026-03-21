@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/messages_provider.dart';
 import '../../models/message.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/message_input.dart';
+import '../../services/storage_service.dart';
 
 class ChatScreen extends StatefulWidget {
-  /// Pass 'new' to start a new report conversation.
   final String reportId;
-
   const ChatScreen({super.key, required this.reportId});
 
   @override
@@ -19,9 +19,11 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final _scrollController = ScrollController();
-  // Saved reference — safe to call in dispose() without context
   late final MessagesProvider _messagesProvider;
   bool get _isNewReport => widget.reportId == 'new';
+
+  bool _photoUploading = false;
+  String? _attachedPhotoUrl;
 
   @override
   void initState() {
@@ -35,6 +37,8 @@ class _ChatScreenState extends State<ChatScreen> {
         _messagesProvider.subscribeToMessages(widget.reportId);
       } else {
         _messagesProvider.clearMessages();
+        // GPS coordinates are already set by LocationPickerScreen
+        // before this screen opens — nothing to do here
       }
     });
   }
@@ -46,39 +50,100 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+  // ── Photo upload ──────────────────────────────────────────────────────────
+
+  void _showPhotoOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take a photo'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhoto(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose from gallery'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhoto(ImageSource.gallery);
+              },
+            ),
+            if (_attachedPhotoUrl != null)
+              ListTile(
+                leading:
+                    const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Remove photo',
+                    style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() => _attachedPhotoUrl = null);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (auth.user == null) return;
+
+    setState(() => _photoUploading = true);
+
+    final url = await StorageService.pickAndUpload(
+      source: source,
+      uploaderId: auth.user!.anonymousId,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _photoUploading = false;
+      _attachedPhotoUrl = url;
+    });
+
+    if (url == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Photo upload failed. Try again.')),
+      );
+    }
+  }
+
+  // ── Send / submit ─────────────────────────────────────────────────────────
 
   Future<void> _sendMessage(String content, {String? imageUrl}) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final msgs = Provider.of<MessagesProvider>(context, listen: false);
     if (auth.user == null) return;
 
-    await msgs.sendMessageWithAI(
+    final effectivePhotoUrl = imageUrl ?? _attachedPhotoUrl;
+
+    await _messagesProvider.sendMessageWithAI(
       widget.reportId,
       content,
-      imageUrl: imageUrl,
+      imageUrl: effectivePhotoUrl,
       reporterAnonymousId: auth.user!.anonymousId,
     );
+
+    if (_attachedPhotoUrl != null) {
+      setState(() => _attachedPhotoUrl = null);
+    }
+
     _scrollToBottom();
   }
 
   Future<void> _submitReport() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final msgs = Provider.of<MessagesProvider>(context, listen: false);
     if (auth.user == null) return;
 
-    final reportId =
-        await msgs.submitPendingReport(auth.user!.anonymousId);
+    final reportId = await _messagesProvider
+        .submitPendingReport(auth.user!.anonymousId);
 
     if (!mounted) return;
 
@@ -100,6 +165,20 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final msgs = Provider.of<MessagesProvider>(context);
@@ -113,7 +192,6 @@ class _ChatScreenState extends State<ChatScreen> {
           if (!_isNewReport)
             IconButton(
               icon: const Icon(Icons.info_outline),
-              tooltip: 'Report details',
               onPressed: () =>
                   context.go('/reports/${widget.reportId}'),
             ),
@@ -124,8 +202,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: SizedBox(
                   width: 18,
                   height: 18,
-                  child:
-                      CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
             ),
@@ -135,12 +212,18 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           if (_isNewReport) const _NewReportBanner(),
 
-          // Green bar + submit button when AI has captured all details
           if (msgs.hasCompletedReport)
             _SubmitReportBar(
               isLoading: msgs.isLoading,
               onSubmit: _submitReport,
             ),
+
+          if (_attachedPhotoUrl != null)
+            _PhotoPreviewBar(
+              onRemove: () => setState(() => _attachedPhotoUrl = null),
+            ),
+
+          if (_photoUploading) const LinearProgressIndicator(),
 
           Expanded(
             child: msgs.isLoading && msgs.messages.isEmpty
@@ -172,7 +255,6 @@ class _ChatScreenState extends State<ChatScreen> {
               onDismiss: msgs.clearError,
             ),
 
-          // Hide input once report is ready — user just taps Submit
           if (!msgs.hasCompletedReport)
             MessageInput(
               reportId: widget.reportId,
@@ -180,6 +262,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   _sendMessage(content, imageUrl: imageUrl),
               onSendWithAI: (content, {imageUrl}) =>
                   _sendMessage(content, imageUrl: imageUrl),
+              onPhotoTap: _showPhotoOptions,
+              hasPhoto: _attachedPhotoUrl != null,
+              photoUploading: _photoUploading,
             ),
         ],
       ),
@@ -188,6 +273,32 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
+
+class _NewReportBanner extends StatelessWidget {
+  const _NewReportBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: Colors.blue.shade50,
+      child: const Row(
+        children: [
+          Icon(Icons.info_outline, color: Colors.blue, size: 18),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Describe the issue in Filipino, Taglish, or English. '
+              'You can also attach a photo.',
+              style: TextStyle(fontSize: 12, color: Colors.blue),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _SubmitReportBar extends StatelessWidget {
   final bool isLoading;
@@ -241,26 +352,29 @@ class _SubmitReportBar extends StatelessWidget {
   }
 }
 
-class _NewReportBanner extends StatelessWidget {
-  const _NewReportBanner();
+class _PhotoPreviewBar extends StatelessWidget {
+  final VoidCallback onRemove;
+  const _PhotoPreviewBar({required this.onRemove});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
       padding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: Colors.blue.shade50,
-      child: const Row(
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color: Colors.grey.shade100,
+      child: Row(
         children: [
-          Icon(Icons.info_outline, color: Colors.blue, size: 18),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Describe the issue in Filipino, Taglish, or English. '
-              'Our AI will guide you through the details.',
-              style: TextStyle(fontSize: 12, color: Colors.blue),
-            ),
+          const Icon(Icons.photo, size: 16, color: Colors.grey),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text('Photo attached',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 16),
+            onPressed: onRemove,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
           ),
         ],
       ),
