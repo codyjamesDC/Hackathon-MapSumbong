@@ -19,6 +19,22 @@ from prompts import (
 )
 from routes import reports, telegram
 
+# ── Supabase client ───────────────────────────────────────────────────────────
+def _get_supabase():
+    """Lazy Supabase client — supports both common key name variants."""
+    from supabase import create_client
+    url = os.getenv('SUPABASE_URL')
+    # Support both SUPABASE_SERVICE_KEY and SUPABASE_SERVICE_ROLE_KEY
+    key = os.getenv('SUPABASE_SERVICE_KEY') or os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    if not url or not key:
+        raise ValueError(
+            f'Supabase credentials missing. '
+            f'URL={bool(url)} KEY={bool(key)}. '
+            f'Check your .env file.'
+        )
+    return create_client(url, key)
+
+
 # ── Gemini client (new SDK) ────────────────────────────────────────────────────
 _gemini = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
 _MODEL = 'gemini-2.5-flash'
@@ -133,6 +149,7 @@ async def process_message(payload: dict):
         }
 
     except Exception as e:
+        print(f'submit_report error: {e}')
         return {'success': False, 'error': str(e)}
 
 
@@ -210,11 +227,7 @@ async def _geocode(location_text: str) -> dict | None:
 @app.post('/submit-report')
 async def submit_report(payload: dict):
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.getenv('SUPABASE_URL'),
-            os.getenv('SUPABASE_SERVICE_KEY'),
-        )
+        supabase = _get_supabase()
 
         report = {
             'id': payload.get('report_id') or f'RPT-{uuid.uuid4().hex[:8].upper()}',
@@ -240,6 +253,7 @@ async def submit_report(payload: dict):
         }
 
     except Exception as e:
+        print(f'submit_report error: {e}')
         return {'success': False, 'error': str(e)}
 
 
