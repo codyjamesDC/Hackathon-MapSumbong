@@ -14,25 +14,27 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // Save a direct reference so we can safely call it in dispose()
+  // without touching context after the widget is deactivated.
+  ReportsProvider? _reportsProvider;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final reportsProvider =
-          Provider.of<ReportsProvider>(context, listen: false);
+      _reportsProvider = Provider.of<ReportsProvider>(context, listen: false);
       final anonymousId = authProvider.user?.anonymousId;
       if (anonymousId != null) {
-        reportsProvider.loadReports(userId: anonymousId);
-        reportsProvider.subscribeToReportUpdates(anonymousId);
+        _reportsProvider?.loadReports(userId: anonymousId);
+        _reportsProvider?.subscribeToReportUpdates(anonymousId);
       }
     });
   }
 
   @override
   void dispose() {
-    Provider.of<ReportsProvider>(context, listen: false)
-        .unsubscribeFromReports();
+    _reportsProvider?.unsubscribeFromReports();
     super.dispose();
   }
 
