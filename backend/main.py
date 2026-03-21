@@ -1,55 +1,80 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
+import uuid
+import json
 import os
 
-# Load environment variables
+import httpx
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
 load_dotenv()
+
+import google.generativeai as genai
+from prompts import (
+    get_chatbot_system_prompt,
+    get_extraction_system_prompt,
+    build_extraction_prompt,
+)
 
 # Import routers
 from routes import reports, telegram
 
-# Create FastAPI app
-app = FastAPI(
-    title='MapSumbong API',
-    description='Backend API for disaster reporting system',
-    version='1.0.0'
+# Initialize Gemini models
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+chat_model = genai.GenerativeModel(
+    "models/gemini-2.5-flash",
+    system_instruction=get_chatbot_system_prompt(),
+)
+extraction_model = genai.GenerativeModel(
+    "models/gemini-2.5-flash",
+    system_instruction=get_extraction_system_prompt(),
 )
 
-# Configure CORS for web dashboard
+# In-memory session store  {session_id: [{"role": ..., "parts": [...]}]}
+sessions: dict[str, list] = {}
+
+# Create FastAPI app
+app = FastAPI(
+    title="MapSumbong API",
+    description="Backend API for disaster reporting system",
+    version="1.0.0",
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],  # In production: ['https://dashboard.mapsumbong.app']
+    allow_origins=["*"],  # In production: restrict to your dashboard domain
     allow_credentials=True,
-    allow_methods=['*'],
-    allow_headers=['*'],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include routers
-app.include_router(reports.router, tags=['reports'])
-app.include_router(telegram.router, prefix='/telegram', tags=['telegram'])
+app.include_router(reports.router, tags=["reports"])
+app.include_router(telegram.router, prefix="/telegram", tags=["telegram"])
 
-# Health check endpoint
-@app.get('/')
+
+# ── Health checks ──────────────────────────────────────────────────────────────
+@app.get("/")
 def health_check():
     return {
-        'status': 'healthy',
-        'service': 'MapSumbong Backend',
-        'version': '1.0.0',
-        'environment': os.getenv('ENVIRONMENT', 'development')
+        "status": "healthy",
+        "service": "MapSumbong Backend",
+        "version": "1.0.0",
+        "environment": os.getenv("ENVIRONMENT", "development"),
     }
 
-@app.get('/health')
+
+@app.get("/health")
 def detailed_health():
-    """Detailed health check with service status"""
     return {
-        'status': 'healthy',
-        'services': {
-            'database': 'connected',  # TODO: Add actual Supabase ping
-            'claude_api': 'configured' if os.getenv('ANTHROPIC_API_KEY') else 'not_configured',
-            'whisper_api': 'configured' if os.getenv('OPENAI_API_KEY') else 'not_configured',
+        "status": "healthy",
+        "services": {
+            "database": "connected",
+            "gemini_api": "configured" if os.getenv("GEMINI_API_KEY") else "not_configured",
+            "whisper_api": "configured" if os.getenv("OPENAI_API_KEY") else "not_configured",
         },
-        'environment': os.getenv('ENVIRONMENT', 'development')
+        "environment": os.getenv("ENVIRONMENT", "development"),
     }
 
 
@@ -62,15 +87,15 @@ async def process_message(payload: dict):
 
     Payload:
         message (str): The user's message
-        session_id (str, optional): Existing session ID. If omitted, a new one is created.
+        session_id (str, optional): Existing session ID. Omit to start a new session.
 
     Returns:
         {
             success: bool,
             session_id: str,
-            response: str,          -- AI chatbot reply (for display in Flutter)
-            is_complete: bool,      -- True when all required fields are gathered
-            report_data: dict|null  -- Structured report (null until is_complete)
+            response: str,
+            is_complete: bool,
+            report_data: dict | null
         }
     """
     try:
@@ -80,26 +105,27 @@ async def process_message(payload: dict):
         if not user_message:
             raise HTTPException(status_code=400, detail="Message is required")
 
-        # Get or create conversation history for this session
         if session_id not in sessions:
             sessions[session_id] = []
 
         history = sessions[session_id]
 
-        # Send message to Gemini with full history
+        # Send to Gemini with full history
         chat = chat_model.start_chat(history=history)
         try:
             response = chat.send_message(user_message)
         except Exception as gemini_err:
             err_str = str(gemini_err)
             if "429" in err_str or "quota" in err_str.lower():
-                import re, asyncio as _asyncio
+                import re
+                import asyncio as _asyncio
                 match = re.search(r"seconds:\s*(\d+)", err_str)
                 wait = int(match.group(1)) + 2 if match else 15
                 await _asyncio.sleep(wait)
                 response = chat.send_message(user_message)
             else:
                 raise
+
         ai_reply = response.text
 
         # Update history
@@ -107,11 +133,10 @@ async def process_message(payload: dict):
         history.append({"role": "model", "parts": [ai_reply]})
         sessions[session_id] = history
 
-        # Try to extract structured data from the conversation so far
+        # Attempt structured extraction once we have enough context
         report_data = None
         is_complete = False
 
-        # Only attempt extraction if we have at least 3 exchanges (enough context)
         if len(history) >= 6:
             report_data, is_complete = await extract_report_data(history)
 
@@ -127,18 +152,15 @@ async def process_message(payload: dict):
         return {"success": False, "error": str(e)}
 
 
-# ── Structured extraction ─────────────────────────────────────────────────────
+# ── Structured extraction ──────────────────────────────────────────────────────
 async def extract_report_data(conversation_history: list) -> tuple[dict | None, bool]:
-    """
-    Uses a separate Gemini call to extract structured JSON from the conversation.
-    Returns (report_data_dict, is_complete).
-    """
+    """Extract structured JSON from the conversation. Returns (data, is_complete)."""
     try:
         extraction_prompt = build_extraction_prompt(conversation_history)
         response = extraction_model.generate_content(extraction_prompt)
 
         raw = response.text.strip()
-        # Strip markdown code fences if Gemini adds them
+        # Strip markdown code fences if present
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -146,46 +168,38 @@ async def extract_report_data(conversation_history: list) -> tuple[dict | None, 
         raw = raw.strip()
 
         data = json.loads(raw)
-
         is_complete = bool(data.get("is_complete", False))
 
-        # If location_text exists, try to geocode it via Nominatim
+        # Geocode if we have a location but no coordinates yet
         if data.get("location_text") and not data.get("latitude"):
             coords = await geocode_location(data["location_text"])
             if coords:
                 data["latitude"] = coords["lat"]
                 data["longitude"] = coords["lon"]
 
-        # Generate a report ID if complete
         if is_complete and not data.get("report_id"):
             data["report_id"] = f"RPT-{uuid.uuid4().hex[:8].upper()}"
 
         return data, is_complete
 
     except (json.JSONDecodeError, Exception):
-        # Extraction failed silently — conversation continues
         return None, False
 
 
-# ── Nominatim geocoding ───────────────────────────────────────────────────────
+# ── Nominatim geocoding ────────────────────────────────────────────────────────
 async def geocode_location(location_text: str) -> dict | None:
-    """
-    Converts a landmark/address string to lat/lon using OpenStreetMap Nominatim.
-    Appends 'Philippines' to improve accuracy.
-    """
+    """Convert a landmark/address string to lat/lon via OpenStreetMap Nominatim."""
     try:
         query = f"{location_text}, Philippines"
-        url = "https://nominatim.openstreetmap.org/search"
-        params = {
-            "q": query,
-            "format": "json",
-            "limit": 1,
-            "countrycodes": "ph",
-        }
+        params = {"q": query, "format": "json", "limit": 1, "countrycodes": "ph"}
         headers = {"User-Agent": "MapSumbong/1.0 (hackathon project)"}
 
         async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(url, params=params, headers=headers)
+            resp = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params=params,
+                headers=headers,
+            )
             results = resp.json()
 
         if results:
@@ -203,12 +217,7 @@ async def geocode_location(location_text: str) -> dict | None:
 # ── Submit confirmed report to Supabase ───────────────────────────────────────
 @app.post("/submit-report")
 async def submit_report(payload: dict):
-    """
-    Called by Flutter when the user confirms the report.
-    Saves the structured report to Supabase.
-
-    Payload: the report_data dict from /process-message + reporter_anonymous_id
-    """
+    """Save a confirmed structured report to Supabase."""
     try:
         from supabase import create_client
 
@@ -247,28 +256,20 @@ async def submit_report(payload: dict):
         return {"success": False, "error": str(e)}
 
 
-# ── Get session history (for Flutter to restore chat) ─────────────────────────
+# ── Session management ─────────────────────────────────────────────────────────
 @app.get("/session/{session_id}")
 def get_session(session_id: str):
     history = sessions.get(session_id, [])
     return {"session_id": session_id, "history": history, "message_count": len(history)}
 
 
-# ── Clear session ──────────────────────────────────────────────────────────────
 @app.delete("/session/{session_id}")
 def clear_session(session_id: str):
     sessions.pop(session_id, None)
     return {"success": True, "message": f"Session {session_id} cleared."}
 
 
-# ── Voice transcription (Day 5) ───────────────────────────────────────────────
-@app.post("/transcribe")
-async def transcribe_audio(payload: dict):
-    # Whisper pipeline — implement on Day 5
-    return {"status": "transcribe endpoint ready", "note": "Implement on Day 5"}
-
-
-# ── Telegram webhook (Day 1-2 setup) ─────────────────────────────────────────
+# ── Telegram webhook ───────────────────────────────────────────────────────────
 @app.post("/telegram-webhook")
 async def telegram_webhook(payload: dict):
     try:
@@ -279,14 +280,10 @@ async def telegram_webhook(payload: dict):
         if not chat_id or not text:
             return {"ok": True}
 
-        # Use the same /process-message pipeline
-        # session_id = telegram chat_id so each user has their own history
-        result = await process_message({
-            "message": text,
-            "session_id": f"telegram_{chat_id}",
-        })
+        result = await process_message(
+            {"message": text, "session_id": f"telegram_{chat_id}"}
+        )
 
-        # Send reply back to Telegram
         bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         if bot_token and result.get("success"):
             async with httpx.AsyncClient() as client:
@@ -305,7 +302,7 @@ async def telegram_webhook(payload: dict):
         return {"ok": False, "error": str(e)}
 
 
-# ── List available Gemini models (debug helper) ───────────────────────────────
+# ── Debug helpers ──────────────────────────────────────────────────────────────
 @app.get("/list-models")
 def list_models():
     models = genai.list_models()
