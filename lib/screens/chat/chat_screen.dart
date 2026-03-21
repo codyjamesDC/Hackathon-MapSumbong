@@ -156,10 +156,14 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       context.go('/reports/$reportId');
     } else {
+      // Show the actual error from the provider so we know what went wrong
+      final errorMsg = Provider.of<MessagesProvider>(context, listen: false).error
+          ?? 'Failed to submit. Please try again.';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to submit. Please try again.'),
+        SnackBar(
+          content: Text(errorMsg),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 6),
         ),
       );
     }
