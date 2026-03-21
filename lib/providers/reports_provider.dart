@@ -15,16 +15,14 @@ class ReportsProvider with ChangeNotifier {
   String? get error => _error;
   Report? get selectedReport => _selectedReport;
 
-  // Get reports by status
-  List<Report> getReportsByStatus(String status) {
-    return _reports.where((report) => report.status == status).toList();
-  }
+  // ── Filtered views ────────────────────────────────────────────────────────
+  List<Report> getReportsByStatus(String status) =>
+      _reports.where((r) => r.status == status).toList();
 
-  // Get user's reports
-  List<Report> getUserReports(String userId) {
-    return _reports.where((report) => report.userId == userId).toList();
-  }
+  List<Report> getReportsByUser(String reporterAnonymousId) =>
+      _reports.where((r) => r.reporterAnonymousId == reporterAnonymousId).toList();
 
+  // ── Load ──────────────────────────────────────────────────────────────────
   Future<void> loadReports({String? userId, String? status}) async {
     _isLoading = true;
     _error = null;
@@ -46,16 +44,16 @@ class ReportsProvider with ChangeNotifier {
     }
   }
 
+  // ── Submit ────────────────────────────────────────────────────────────────
   Future<Report> submitReport(Report report) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final submittedReport = await ApiService.submitReport(report);
-      _reports.insert(0, submittedReport);
-      notifyListeners();
-      return submittedReport;
+      final submitted = await ApiService.submitReport(report);
+      _reports.insert(0, submitted);
+      return submitted;
     } catch (e) {
       _error = e.toString();
       rethrow;
@@ -65,6 +63,7 @@ class ReportsProvider with ChangeNotifier {
     }
   }
 
+  // ── Status update ─────────────────────────────────────────────────────────
   Future<void> updateReportStatus(String reportId, String newStatus) async {
     try {
       await ApiService.updateReportStatus(
@@ -72,7 +71,6 @@ class ReportsProvider with ChangeNotifier {
         status: newStatus,
       );
 
-      // Update local report
       final index = _reports.indexWhere((r) => r.id == reportId);
       if (index != -1) {
         _reports[index] = _reports[index].copyWith(status: newStatus);
@@ -84,6 +82,7 @@ class ReportsProvider with ChangeNotifier {
     }
   }
 
+  // ── Select a single report ────────────────────────────────────────────────
   Future<void> selectReport(String reportId) async {
     _isLoading = true;
     notifyListeners();
@@ -103,30 +102,34 @@ class ReportsProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> refreshReports() async {
-    await loadReports();
-  }
+  Future<void> refreshReports() => loadReports();
 
   void clearError() {
     _error = null;
     notifyListeners();
   }
 
-  // Real-time subscription methods
+  // ── Real-time subscriptions ───────────────────────────────────────────────
   StreamSubscription? _reportsSubscription;
 
-  void subscribeToReportUpdates(String userId) {
+  /// Subscribe to updates for a specific user's reports.
+  void subscribeToReportUpdates(String reporterAnonymousId) {
     _reportsSubscription?.cancel();
-    _reportsSubscription = SupabaseService.subscribeToAllReports().listen((data) {
-      final allReports = data.map((json) => Report.fromJson(json)).toList();
-      _reports = allReports.where((report) => report.userId == userId).toList();
+    _reportsSubscription =
+        SupabaseService.subscribeToAllReports().listen((data) {
+      _reports = data
+          .map((json) => Report.fromJson(json))
+          .where((r) => r.reporterAnonymousId == reporterAnonymousId)
+          .toList();
       notifyListeners();
     });
   }
 
+  /// Subscribe to all reports (for officials / admin views).
   void subscribeToAllReports() {
     _reportsSubscription?.cancel();
-    _reportsSubscription = SupabaseService.subscribeToAllReports().listen((data) {
+    _reportsSubscription =
+        SupabaseService.subscribeToAllReports().listen((data) {
       _reports = data.map((json) => Report.fromJson(json)).toList();
       notifyListeners();
     });
