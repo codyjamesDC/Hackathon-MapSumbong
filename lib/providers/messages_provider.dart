@@ -168,6 +168,12 @@ class MessagesProvider with ChangeNotifier {
         reporterAnonymousId: reporterAnonymousId,
       );
 
+      // Backend returns success:false with error message on DB failures
+      if (result['success'] == false) {
+        _error = result['error'] as String? ?? 'Unknown error from server';
+        return null;
+      }
+
       final reportId = result['report_id'] as String?;
       if (reportId != null) {
         _pendingReportData = null;
