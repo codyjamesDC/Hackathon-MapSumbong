@@ -3,19 +3,15 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/messages_provider.dart';
-import '../../providers/reports_provider.dart';
 import '../../models/message.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/message_input.dart';
 
 class ChatScreen extends StatefulWidget {
-  /// Pass 'new' to start a new report conversation without a pre-existing report.
+  /// Pass 'new' to start a new report conversation.
   final String reportId;
 
-  const ChatScreen({
-    super.key,
-    required this.reportId,
-  });
+  const ChatScreen({super.key, required this.reportId});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -23,25 +19,29 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final _scrollController = ScrollController();
+  // Saved reference — safe to call in dispose() without context
+  late final MessagesProvider _messagesProvider;
   bool get _isNewReport => widget.reportId == 'new';
 
   @override
   void initState() {
     super.initState();
-    if (!_isNewReport) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final messagesProvider =
-            Provider.of<MessagesProvider>(context, listen: false);
-        messagesProvider.loadMessages(widget.reportId);
-        messagesProvider.subscribeToMessages(widget.reportId);
-      });
-    }
+    _messagesProvider =
+        Provider.of<MessagesProvider>(context, listen: false);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isNewReport) {
+        _messagesProvider.loadMessages(widget.reportId);
+        _messagesProvider.subscribeToMessages(widget.reportId);
+      } else {
+        _messagesProvider.clearMessages();
+      }
+    });
   }
 
   @override
   void dispose() {
-    Provider.of<MessagesProvider>(context, listen: false)
-        .unsubscribeFromMessages();
+    _messagesProvider.unsubscribeFromMessages();
     _scrollController.dispose();
     super.dispose();
   }
@@ -58,11 +58,51 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  Future<void> _sendMessage(String content, {String? imageUrl}) async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final msgs = Provider.of<MessagesProvider>(context, listen: false);
+    if (auth.user == null) return;
+
+    await msgs.sendMessageWithAI(
+      widget.reportId,
+      content,
+      imageUrl: imageUrl,
+      reporterAnonymousId: auth.user!.anonymousId,
+    );
+    _scrollToBottom();
+  }
+
+  Future<void> _submitReport() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final msgs = Provider.of<MessagesProvider>(context, listen: false);
+    if (auth.user == null) return;
+
+    final reportId =
+        await msgs.submitPendingReport(auth.user!.anonymousId);
+
+    if (!mounted) return;
+
+    if (reportId != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Report $reportId submitted!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      context.go('/reports/$reportId');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to submit. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final messagesProvider = Provider.of<MessagesProvider>(context);
-    final authProvider = Provider.of<AuthProvider>(context);
-
+    final msgs = Provider.of<MessagesProvider>(context);
     final title =
         _isNewReport ? 'New Report' : 'Report ${widget.reportId}';
 
@@ -74,16 +114,18 @@ class _ChatScreenState extends State<ChatScreen> {
             IconButton(
               icon: const Icon(Icons.info_outline),
               tooltip: 'Report details',
-              onPressed: () => context.go('/reports/${widget.reportId}'),
+              onPressed: () =>
+                  context.go('/reports/${widget.reportId}'),
             ),
-          if (messagesProvider.isTyping)
+          if (msgs.isTyping)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 12),
               child: Center(
                 child: SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child:
+                      CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
             ),
@@ -91,126 +133,113 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
-          // Hint banner for new reports
           if (_isNewReport) const _NewReportBanner(),
 
-          // Messages list
-          Expanded(
-            child: messagesProvider.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : messagesProvider.messages.isEmpty
-                    ? _EmptyChat(isNewReport: _isNewReport)
-                    : _buildMessages(
-                        messagesProvider.messages, authProvider),
-          ),
-
-          // Error banner
-          if (messagesProvider.error != null)
-            _ErrorBanner(
-              message: messagesProvider.error!,
-              onDismiss: messagesProvider.clearError,
+          // Green bar + submit button when AI has captured all details
+          if (msgs.hasCompletedReport)
+            _SubmitReportBar(
+              isLoading: msgs.isLoading,
+              onSubmit: _submitReport,
             ),
 
-          // Input
-          MessageInput(
-            reportId: widget.reportId,
-            onSendMessage: (content, {imageUrl}) =>
-                _sendMessage(context, content, imageUrl: imageUrl),
-            onSendWithAI: (content, {imageUrl}) =>
-                _sendWithAI(context, content, imageUrl: imageUrl),
+          Expanded(
+            child: msgs.isLoading && msgs.messages.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : msgs.messages.isEmpty
+                    ? _EmptyChat(isNewReport: _isNewReport)
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        itemCount: msgs.messages.length,
+                        itemBuilder: (context, index) {
+                          final msg = msgs.messages[index];
+                          final isMe =
+                              msg.senderType == 'resident';
+                          return Padding(
+                            padding:
+                                const EdgeInsets.only(bottom: 8),
+                            child: MessageBubble(
+                                message: msg, isMe: isMe),
+                          );
+                        },
+                      ),
+          ),
+
+          if (msgs.error != null)
+            _ErrorBanner(
+              message: msgs.error!,
+              onDismiss: msgs.clearError,
+            ),
+
+          // Hide input once report is ready — user just taps Submit
+          if (!msgs.hasCompletedReport)
+            MessageInput(
+              reportId: widget.reportId,
+              onSendMessage: (content, {imageUrl}) =>
+                  _sendMessage(content, imageUrl: imageUrl),
+              onSendWithAI: (content, {imageUrl}) =>
+                  _sendMessage(content, imageUrl: imageUrl),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Sub-widgets ───────────────────────────────────────────────────────────────
+
+class _SubmitReportBar extends StatelessWidget {
+  final bool isLoading;
+  final VoidCallback onSubmit;
+  const _SubmitReportBar(
+      {required this.isLoading, required this.onSubmit});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: Colors.green.shade50,
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle_outline,
+              color: Colors.green, size: 20),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Report details captured! Ready to submit.',
+              style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.green,
+                  fontWeight: FontWeight.w500),
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: isLoading ? null : onSubmit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 8),
+            ),
+            child: isLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('Submit',
+                    style: TextStyle(fontSize: 13)),
           ),
         ],
       ),
     );
   }
-
-  Widget _buildMessages(List<Message> messages, AuthProvider auth) {
-    _scrollToBottom();
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      itemCount: messages.length,
-      itemBuilder: (context, index) {
-        final msg = messages[index];
-        final isMe = msg.senderId == auth.user?.id;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: MessageBubble(message: msg, isMe: isMe),
-        );
-      },
-    );
-  }
-
-  Future<void> _sendMessage(
-    BuildContext context,
-    String content, {
-    String? imageUrl,
-  }) async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final messagesProvider =
-        Provider.of<MessagesProvider>(context, listen: false);
-
-    if (authProvider.user == null) return;
-
-    // For new reports, route through AI so the backend creates the report
-    if (_isNewReport) {
-      await messagesProvider.sendMessageWithAI(
-        'new',
-        content,
-        imageUrl: imageUrl,
-      );
-      _scrollToBottom();
-      return;
-    }
-
-    final message = Message(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      reportId: widget.reportId,
-      senderId: authProvider.user!.id,
-      senderType: 'resident',
-      content: content,
-      timestamp: DateTime.now(),
-      messageType: imageUrl != null ? 'image' : 'text',
-      imageUrl: imageUrl,
-    );
-
-    try {
-      await messagesProvider.sendMessage(message);
-      _scrollToBottom();
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _sendWithAI(
-    BuildContext context,
-    String content, {
-    String? imageUrl,
-  }) async {
-    final messagesProvider =
-        Provider.of<MessagesProvider>(context, listen: false);
-    try {
-      await messagesProvider.sendMessageWithAI(
-        widget.reportId,
-        content,
-        imageUrl: imageUrl,
-      );
-      _scrollToBottom();
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send: $e')),
-        );
-      }
-    }
-  }
 }
-
-// ── Private helpers ───────────────────────────────────────────────────────────
 
 class _NewReportBanner extends StatelessWidget {
   const _NewReportBanner();
@@ -219,16 +248,17 @@ class _NewReportBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       color: Colors.blue.shade50,
-      child: Row(
+      child: const Row(
         children: [
-          const Icon(Icons.info_outline, color: Colors.blue, size: 18),
-          const SizedBox(width: 10),
-          const Expanded(
+          Icon(Icons.info_outline, color: Colors.blue, size: 18),
+          SizedBox(width: 10),
+          Expanded(
             child: Text(
               'Describe the issue in Filipino, Taglish, or English. '
-              'Our AI will extract the report details for you.',
+              'Our AI will guide you through the details.',
               style: TextStyle(fontSize: 12, color: Colors.blue),
             ),
           ),
@@ -251,7 +281,9 @@ class _EmptyChat extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              isNewReport ? Icons.chat_bubble_outline : Icons.mark_chat_read,
+              isNewReport
+                  ? Icons.chat_bubble_outline
+                  : Icons.mark_chat_read,
               size: 64,
               color: Colors.grey[400],
             ),
@@ -266,10 +298,12 @@ class _EmptyChat extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               isNewReport
-                  ? 'Type a description and our AI will create a report for you.'
+                  ? 'Describe what\'s happening and our AI will '
+                      'extract the report details for you.'
                   : 'Start a conversation with the local authorities.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[600], fontSize: 14),
+              style:
+                  TextStyle(color: Colors.grey[600], fontSize: 14),
             ),
           ],
         ),
@@ -281,13 +315,15 @@ class _EmptyChat extends StatelessWidget {
 class _ErrorBanner extends StatelessWidget {
   final String message;
   final VoidCallback onDismiss;
-  const _ErrorBanner({required this.message, required this.onDismiss});
+  const _ErrorBanner(
+      {required this.message, required this.onDismiss});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.red.shade50,
         borderRadius: BorderRadius.circular(8),
@@ -295,16 +331,18 @@ class _ErrorBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: Colors.red, size: 16),
+          const Icon(Icons.error_outline,
+              color: Colors.red, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(message,
-                style:
-                    const TextStyle(fontSize: 12, color: Colors.red)),
+                style: const TextStyle(
+                    fontSize: 12, color: Colors.red)),
           ),
           GestureDetector(
             onTap: onDismiss,
-            child: const Icon(Icons.close, size: 16, color: Colors.red),
+            child: const Icon(Icons.close,
+                size: 16, color: Colors.red),
           ),
         ],
       ),
