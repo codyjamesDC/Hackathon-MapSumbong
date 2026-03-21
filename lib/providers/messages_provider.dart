@@ -11,18 +11,24 @@ class MessagesProvider with ChangeNotifier {
   bool _isTyping = false;
   StreamSubscription? _messagesSubscription;
 
-  // Tracks the Gemini session ID so multi-turn conversation works correctly
   String? _sessionId;
-
-  // Once the backend marks is_complete=true, we store the extracted data
   Map<String, dynamic>? _pendingReportData;
+
+  // GPS coordinates captured when the report session starts
+  double? _capturedLat;
+  double? _capturedLng;
 
   List<Message> get messages => _messages;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isTyping => _isTyping;
-  Map<String, dynamic>? get pendingReportData => _pendingReportData;
   bool get hasCompletedReport => _pendingReportData != null;
+
+  /// Store GPS fix before starting a new report conversation.
+  void setGpsCoordinates(double lat, double lng) {
+    _capturedLat = lat;
+    _capturedLng = lng;
+  }
 
   // ── Load messages for an existing report ──────────────────────────────────
   Future<void> loadMessages(String reportId) async {
@@ -41,12 +47,11 @@ class MessagesProvider with ChangeNotifier {
     }
   }
 
-  // ── Send a plain message (authority chat, not AI) ─────────────────────────
+  // ── Send a plain message (authority chat) ─────────────────────────────────
   Future<void> sendMessage(Message message) async {
     try {
       _messages.add(message);
       notifyListeners();
-
       final sent = await ApiService.sendMessage(message);
       final index = _messages.indexWhere((m) => m.id == message.id);
       if (index != -1) {
@@ -61,15 +66,13 @@ class MessagesProvider with ChangeNotifier {
     }
   }
 
-  // ── Send a message through Gemini AI ─────────────────────────────────────
-  // This is the main entry point for the "new report" chat flow.
+  // ── Send through Gemini AI ─────────────────────────────────────────────────
   Future<void> sendMessageWithAI(
     String reportId,
     String content, {
     String? imageUrl,
     String? reporterAnonymousId,
   }) async {
-    // 1. Show the user's message immediately
     final userMessage = Message(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       reportId: reportId,
@@ -86,7 +89,6 @@ class MessagesProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // 2. Call the backend /process-message endpoint
       final result = await ApiService.processMessage(
         message: content,
         reporterId: reporterAnonymousId ?? 'ANON-DEV01',
@@ -94,17 +96,15 @@ class MessagesProvider with ChangeNotifier {
         sessionId: _sessionId,
       );
 
-      // 3. Persist the session ID for multi-turn conversation
       if (result['session_id'] != null) {
         _sessionId = result['session_id'] as String;
       }
 
-      // 4. Add the AI response bubble
       final aiText = result['response'] as String? ??
           result['chatbot_response'] as String? ??
           'Salamat sa inyong mensahe!';
 
-      final aiMessage = Message(
+      _messages.add(Message(
         id: '${DateTime.now().millisecondsSinceEpoch}_ai',
         reportId: reportId,
         senderId: 'ai_assistant',
@@ -112,41 +112,37 @@ class MessagesProvider with ChangeNotifier {
         content: aiText,
         timestamp: DateTime.now(),
         messageType: 'text',
-      );
-      _messages.add(aiMessage);
+      ));
 
-      // 5. If the report is complete, store extracted data and show a prompt
       final isComplete = result['is_complete'] as bool? ?? false;
-      final reportData =
-          result['report_data'] as Map<String, dynamic>?;
+      final reportData = result['report_data'] as Map<String, dynamic>?;
 
       if (isComplete && reportData != null) {
+        // Inject GPS if available and backend didn't geocode a location
+        if (_capturedLat != null && _capturedLng != null) {
+          reportData['latitude'] ??= _capturedLat;
+          reportData['longitude'] ??= _capturedLng;
+        }
         _pendingReportData = reportData;
 
-        // Add a system message nudging the user to confirm
-        final systemMessage = Message(
+        _messages.add(Message(
           id: '${DateTime.now().millisecondsSinceEpoch}_sys',
           reportId: reportId,
           senderId: 'system',
           senderType: 'system',
-          content:
-              '✅ Report details extracted. Tap "Submit Report" to save.',
+          content: '✅ Report details captured. Tap "Submit Report" to save.',
           timestamp: DateTime.now(),
           messageType: 'system',
-        );
-        _messages.add(systemMessage);
+        ));
       }
     } catch (e) {
       _error = e.toString();
-
-      // Show an error bubble in the chat
       _messages.add(Message(
         id: '${DateTime.now().millisecondsSinceEpoch}_err',
         reportId: reportId,
         senderId: 'system',
         senderType: 'system',
-        content:
-            'Pasensya na, may error sa koneksyon. Subukan ulit.',
+        content: 'Pasensya na, may error sa koneksyon. Subukan ulit.',
         timestamp: DateTime.now(),
         messageType: 'system',
       ));
@@ -156,24 +152,28 @@ class MessagesProvider with ChangeNotifier {
     }
   }
 
-  // ── Submit the pending extracted report to Supabase ───────────────────────
+  // ── Submit pending report ─────────────────────────────────────────────────
   Future<String?> submitPendingReport(String reporterAnonymousId) async {
     if (_pendingReportData == null) return null;
-
     _isLoading = true;
     notifyListeners();
 
     try {
+      final payload = Map<String, dynamic>.from(_pendingReportData!);
+      if (_capturedLat != null) payload['latitude'] ??= _capturedLat;
+      if (_capturedLng != null) payload['longitude'] ??= _capturedLng;
+
       final result = await ApiService.submitReport(
-        reportData: _pendingReportData!,
+        reportData: payload,
         reporterAnonymousId: reporterAnonymousId,
       );
 
       final reportId = result['report_id'] as String?;
-
       if (reportId != null) {
         _pendingReportData = null;
         _sessionId = null;
+        _capturedLat = null;
+        _capturedLng = null;
 
         _messages.add(Message(
           id: '${DateTime.now().millisecondsSinceEpoch}_saved',
@@ -185,7 +185,6 @@ class MessagesProvider with ChangeNotifier {
           messageType: 'system',
         ));
       }
-
       return reportId;
     } catch (e) {
       _error = e.toString();
@@ -196,17 +195,13 @@ class MessagesProvider with ChangeNotifier {
     }
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
-
-  void setTyping(bool typing) {
-    _isTyping = typing;
-    notifyListeners();
-  }
-
+  // ── Helpers ───────────────────────────────────────────────────────────────
   void clearMessages() {
     _messages.clear();
     _sessionId = null;
     _pendingReportData = null;
+    _capturedLat = null;
+    _capturedLng = null;
     notifyListeners();
   }
 
@@ -215,18 +210,12 @@ class MessagesProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void resetSession() {
-    _sessionId = null;
-    _pendingReportData = null;
-  }
-
-  // ── Real-time subscription ─────────────────────────────────────────────────
+  // ── Real-time ─────────────────────────────────────────────────────────────
   void subscribeToMessages(String reportId) {
     _messagesSubscription?.cancel();
     _messagesSubscription =
         SupabaseService.subscribeToMessages(reportId).listen((data) {
-      final incoming =
-          data.map((json) => Message.fromJson(json)).toList();
+      final incoming = data.map((json) => Message.fromJson(json)).toList();
       for (final msg in incoming) {
         if (!_messages.any((m) => m.id == msg.id)) {
           _messages.add(msg);
