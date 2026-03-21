@@ -13,20 +13,18 @@ import 'screens/home/home_screen.dart';
 import 'screens/reports/reports_list_screen.dart';
 import 'screens/reports/report_detail_screen.dart';
 import 'screens/chat/chat_screen.dart';
+import 'screens/map/map_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
   await dotenv.load(fileName: '.env');
 
-  // Initialize Supabase
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
 
-  // Initialize notifications
   await NotificationService.initialize();
 
   runApp(const MapSumbongApp());
@@ -45,69 +43,71 @@ class MapSumbongApp extends StatelessWidget {
       ],
       child: MaterialApp.router(
         title: 'MapSumbong',
+        debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          primarySwatch: Colors.blue,
+          colorSchemeSeed: Colors.blue,
           useMaterial3: true,
-          fontFamily: 'Inter',
         ),
-        routerConfig: _router,
+        routerConfig: _buildRouter(),
       ),
     );
   }
 }
 
-// Router configuration
-final GoRouter _router = GoRouter(
-  initialLocation: '/auth',
-  routes: [
-    GoRoute(
-      path: '/auth',
-      builder: (context, state) => const PhoneAuthScreen(),
-    ),
-    GoRoute(
-      path: '/otp',
-      builder: (context, state) {
-        final phoneNumber = state.uri.queryParameters['phone'] ?? '';
-        return OtpVerificationScreen(phoneNumber: phoneNumber);
-      },
-    ),
-    GoRoute(
-      path: '/home',
-      builder: (context, state) => const HomeScreen(),
-    ),
-    GoRoute(
-      path: '/reports',
-      builder: (context, state) => const ReportsListScreen(),
-    ),
-    GoRoute(
-      path: '/reports/:id',
-      builder: (context, state) {
-        final reportId = state.pathParameters['id']!;
-        return ReportDetailScreen(reportId: reportId);
-      },
-    ),
-    GoRoute(
-      path: '/chat/:reportId',
-      builder: (context, state) {
-        final reportId = state.pathParameters['reportId']!;
-        return ChatScreen(reportId: reportId);
-      },
-    ),
-  ],
-  redirect: (context, state) {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final isAuthenticated = authProvider.isAuthenticated;
-    final isAuthRoute = state.matchedLocation.startsWith('/auth') ||
-                       state.matchedLocation.startsWith('/otp');
+GoRouter _buildRouter() {
+  return GoRouter(
+    initialLocation: '/auth',
+    redirect: (context, state) {
+      final authProvider =
+          Provider.of<AuthProvider>(context, listen: false);
+      final isAuthenticated = authProvider.isAuthenticated;
+      final path = state.uri.path; // ← fixed: GoRouter v17 uses uri.path
 
-    if (!isAuthenticated && !isAuthRoute) {
-      return '/auth';
-    }
+      final isAuthRoute =
+          path.startsWith('/auth') || path.startsWith('/otp');
 
-    if (isAuthenticated && isAuthRoute) {
-      return '/home';
-    }
-
-    return null;
-  },
-);
+      if (!isAuthenticated && !isAuthRoute) return '/auth';
+      if (isAuthenticated && isAuthRoute) return '/home';
+      return null;
+    },
+    routes: [
+      GoRoute(
+        path: '/auth',
+        builder: (context, state) => const PhoneAuthScreen(),
+      ),
+      GoRoute(
+        path: '/otp',
+        builder: (context, state) {
+          final phone = state.uri.queryParameters['phone'] ?? '';
+          return OtpVerificationScreen(phoneNumber: phone);
+        },
+      ),
+      GoRoute(
+        path: '/home',
+        builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: '/reports',
+        builder: (context, state) => const ReportsListScreen(),
+      ),
+      GoRoute(
+        path: '/reports/:id',
+        builder: (context, state) {
+          final reportId = state.pathParameters['id']!;
+          return ReportDetailScreen(reportId: reportId);
+        },
+      ),
+      GoRoute(
+        path: '/chat/:reportId',
+        builder: (context, state) {
+          final reportId = state.pathParameters['reportId']!;
+          return ChatScreen(reportId: reportId);
+        },
+      ),
+      GoRoute(
+        path: '/map',
+        builder: (context, state) => const MapScreen(),
+      ),
+    ],
+  );
+}
