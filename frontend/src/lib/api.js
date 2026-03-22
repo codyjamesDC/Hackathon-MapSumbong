@@ -24,7 +24,7 @@ const headers = {
 export async function fetchIncidents() {
   if (!SUPABASE_URL) return null;
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/incidents?select=*&order=created_at.desc`, { headers });
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/reports?select=*&order=created_at.desc`, { headers });
   if (!res.ok) throw new Error('Failed to fetch incidents');
   const rows = await res.json();
 
@@ -37,10 +37,10 @@ export async function fetchIncidents() {
 export async function resolveIncident(id) {
   if (!SUPABASE_URL) return;
 
-  await fetch(`${SUPABASE_URL}/rest/v1/incidents?id=eq.${id}`, {
+  await fetch(`${SUPABASE_URL}/rest/v1/reports?id=eq.${id}`, {
     method: 'PATCH',
     headers,
-    body: JSON.stringify({ resolved: true, resolved_at: new Date().toISOString() })
+    body: JSON.stringify({ status: 'resolved'})
   });
 
   // Trigger Edge Function to send resolution SMS to reporter
@@ -70,7 +70,7 @@ export function subscribeToIncidents(onInsert, onUpdate) {
 
   ws.onopen = () => {
     ws.send(JSON.stringify({
-      topic: 'realtime:public:incidents',
+      topic: 'realtime:public:reports',
       event: 'phx_join',
       payload: {},
       ref: null
@@ -90,6 +90,22 @@ export function subscribeToIncidents(onInsert, onUpdate) {
   return ws;
 }
 
+function deriveCategory(issueType) {
+  const map = {
+    flood: 'flood',
+    emergency: 'medical',
+    fire: 'fire',
+    road_damage: 'infrastructure',
+    pothole: 'infrastructure',
+    broken_streetlight: 'infrastructure',
+    power_outage: 'infrastructure',
+    garbage: 'waste',
+    water_problem: 'waste',
+    other: 'other',
+  };
+  return map[issueType] || 'other';
+}
+
 /**
  * Maps a Supabase DB row to the MapSumbong incident schema
  * Adjust field names to match your actual Supabase table columns
@@ -97,22 +113,22 @@ export function subscribeToIncidents(onInsert, onUpdate) {
 function mapRow(row) {
   return {
     id: row.id,
-    type: row.incident_type || 'Unknown',
-    category: row.category || 'other',
-    severity: row.severity || 'medium',
+    type: row.issue_type || 'Unknown',
+    category: deriveCategory(row.issue_type),
+    severity: row.urgency || 'medium',
     barangay: row.barangay || 'Unknown Barangay',
-    location: row.location_description || '',
+    location: row.location_text || '',
     lat: parseFloat(row.latitude) || 14.6,
     lng: parseFloat(row.longitude) || 121.0,
-    reports: row.report_count || 1,
+    reports: 1,
     time: formatTime(row.created_at),
-    channel: row.channel || 'Unknown',
-    description: row.raw_message || '',
-    ai: row.ai_assessment || '',
-    action: row.immediate_action || '',
-    authorities: row.notified_authorities || [],
-    resolved: row.resolved || false,
-    radius: Math.max(100, (row.report_count || 1) * 30)
+    channel: 'App',
+    description: row.description || '',
+    ai: '',
+    action: '',
+    authorities: [],
+    resolved: row.status === 'resolved',
+    radius: 150,
   };
 }
 
