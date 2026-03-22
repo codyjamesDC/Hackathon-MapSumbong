@@ -15,6 +15,7 @@ import 'screens/reports/report_detail_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'screens/map/map_screen.dart';
 import 'screens/location/location_picker_screen.dart';
+import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,10 +46,7 @@ class MapSumbongApp extends StatelessWidget {
       child: MaterialApp.router(
         title: 'MapSumbong',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorSchemeSeed: Colors.blue,
-          useMaterial3: true,
-        ),
+        theme: AppTheme.light,
         routerConfig: _buildRouter(),
       ),
     );

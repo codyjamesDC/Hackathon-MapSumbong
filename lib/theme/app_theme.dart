@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // ── MapSumbong Design System ───────────────────────────────────────────────────
 // Aesthetic: "Civic Tech Warmth" — clean, trustworthy, accessible, Filipino
@@ -111,14 +112,14 @@ class AppTheme {
         background: AppColors.background,
       ),
       scaffoldBackgroundColor: AppColors.background,
-      fontFamily: 'Nunito',
-      appBarTheme: const AppBarTheme(
+      fontFamily: GoogleFonts.nunito().fontFamily,
+      appBarTheme: AppBarTheme(
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
-          fontFamily: 'Nunito',
+          fontFamily: GoogleFonts.nunito().fontFamily,
           fontSize: 18,
           fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
@@ -149,8 +150,8 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
-          textStyle: const TextStyle(
-            fontFamily: 'Nunito',
+          textStyle: TextStyle(
+            fontFamily: GoogleFonts.nunito().fontFamily,
             fontSize: 15,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.2,
@@ -165,8 +166,8 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
-          textStyle: const TextStyle(
-            fontFamily: 'Nunito',
+          textStyle: TextStyle(
+            fontFamily: GoogleFonts.nunito().fontFamily,
             fontSize: 15,
             fontWeight: FontWeight.w700,
           ),
@@ -175,8 +176,8 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primary,
-          textStyle: const TextStyle(
-            fontFamily: 'Nunito',
+          textStyle: TextStyle(
+            fontFamily: GoogleFonts.nunito().fontFamily,
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -202,29 +203,29 @@ class AppTheme {
           borderSide: const BorderSide(color: AppColors.critical, width: 1.5),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        hintStyle: const TextStyle(
+        hintStyle: TextStyle(
           color: AppColors.textMuted,
-          fontFamily: 'Nunito',
+          fontFamily: GoogleFonts.nunito().fontFamily,
           fontSize: 14,
         ),
-        labelStyle: const TextStyle(
+        labelStyle: TextStyle(
           color: AppColors.textSecondary,
-          fontFamily: 'Nunito',
+          fontFamily: GoogleFonts.nunito().fontFamily,
           fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
       ),
-      tabBarTheme: const TabBarThemeData(
+      tabBarTheme: TabBarThemeData(
         indicatorColor: AppColors.primary,
         labelColor: AppColors.primary,
         unselectedLabelColor: AppColors.textMuted,
         labelStyle: TextStyle(
-          fontFamily: 'Nunito',
+          fontFamily: GoogleFonts.nunito().fontFamily,
           fontWeight: FontWeight.w700,
           fontSize: 13,
         ),
         unselectedLabelStyle: TextStyle(
-          fontFamily: 'Nunito',
+          fontFamily: GoogleFonts.nunito().fontFamily,
           fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
@@ -244,8 +245,8 @@ class AppTheme {
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
         backgroundColor: AppColors.textPrimary,
-        contentTextStyle: const TextStyle(
-          fontFamily: 'Nunito',
+        contentTextStyle: TextStyle(
+          fontFamily: GoogleFonts.nunito().fontFamily,
           fontSize: 14,
           color: Colors.white,
         ),
@@ -255,21 +256,21 @@ class AppTheme {
         thickness: 1,
         space: 1,
       ),
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -1),
-        displayMedium: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.5),
-        headlineLarge: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w700, color: AppColors.textPrimary, letterSpacing: -0.3),
-        headlineMedium: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-        headlineSmall: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-        titleLarge: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w700, color: AppColors.textPrimary, letterSpacing: -0.2),
-        titleMedium: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-        titleSmall: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-        bodyLarge: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w500, color: AppColors.textPrimary),
-        bodyMedium: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w400, color: AppColors.textSecondary),
-        bodySmall: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w400, color: AppColors.textMuted),
-        labelLarge: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w700, letterSpacing: 0.3),
-        labelMedium: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w600, letterSpacing: 0.2),
-        labelSmall: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w600, letterSpacing: 0.3),
+      textTheme: TextTheme(
+        displayLarge: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -1),
+        displayMedium: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: -0.5),
+        headlineLarge: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w700, color: AppColors.textPrimary, letterSpacing: -0.3),
+        headlineMedium: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+        headlineSmall: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+        titleLarge: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w700, color: AppColors.textPrimary, letterSpacing: -0.2),
+        titleMedium: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+        titleSmall: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+        bodyLarge: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+        bodyMedium: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
+        bodySmall: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w400, color: AppColors.textMuted),
+        labelLarge: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+        labelMedium: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w600, letterSpacing: 0.2),
+        labelSmall: TextStyle(fontFamily: GoogleFonts.nunito().fontFamily, fontWeight: FontWeight.w600, letterSpacing: 0.3),
       ),
     );
   }
