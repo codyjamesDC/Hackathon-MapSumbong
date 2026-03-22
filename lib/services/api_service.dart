@@ -21,12 +21,13 @@ class ApiService {
     double? latitude,
     double? longitude,
   }) async {
-    debugPrint('ApiService: POST \$baseUrl/process-message');
+    final url = '$baseUrl/process-message';
+    debugPrint('ApiService: POST $url');
 
     try {
       final response = await http
           .post(
-            Uri.parse('\$baseUrl/process-message'),
+            Uri.parse(url),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'message': message,
@@ -40,8 +41,8 @@ class ApiService {
           .timeout(
             _timeout,
             onTimeout: () => throw Exception(
-              'The AI is taking too long to respond. '
-              'Please check your internet connection and try again.',
+              'Matagal na sumasakot ang AI. '
+              'Pakisuriin ang iyong koneksyon at subukan ulit.',
             ),
           );
 
@@ -63,11 +64,12 @@ class ApiService {
     required Map<String, dynamic> reportData,
     required String reporterAnonymousId,
   }) async {
-    debugPrint('ApiService: POST $baseUrl/submit-report');
+    final url = '$baseUrl/submit-report';
+    debugPrint('ApiService: POST $url');
 
     final response = await http
         .post(
-          Uri.parse('$baseUrl/submit-report'),
+          Uri.parse(url),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             ...reportData,
@@ -103,8 +105,7 @@ class ApiService {
 
     final uri = Uri.parse('$baseUrl/reports')
         .replace(queryParameters: queryParams);
-    final response =
-        await http.get(uri).timeout(_timeout);
+    final response = await http.get(uri).timeout(_timeout);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -117,8 +118,9 @@ class ApiService {
 
   // ── Get single report ─────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getReport(String reportId) async {
+    final url = '$baseUrl/reports/$reportId';
     final response = await http
-        .get(Uri.parse('$baseUrl/reports/$reportId'))
+        .get(Uri.parse(url))
         .timeout(_timeout);
 
     if (response.statusCode == 200) {
@@ -136,9 +138,10 @@ class ApiService {
     String? resolutionPhotoUrl,
     String? updatedBy,
   }) async {
+    final url = '$baseUrl/reports/$reportId/status';
     final response = await http
         .patch(
-          Uri.parse('$baseUrl/reports/$reportId/status'),
+          Uri.parse(url),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'status': status,
@@ -169,9 +172,10 @@ class ApiService {
   }
 
   static Future<Message> sendMessage(Message message) async {
+    final url = '$baseUrl/send-message';
     final response = await http
         .post(
-          Uri.parse('$baseUrl/send-message'),
+          Uri.parse(url),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(message.toJson()),
         )
