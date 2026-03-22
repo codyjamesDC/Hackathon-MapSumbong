@@ -6,6 +6,8 @@ import '../../providers/auth_provider.dart';
 import '../../providers/messages_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../models/report.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/app_components.dart';
 import '../../widgets/report_card.dart';
 import '../../screens/location/location_picker_screen.dart';
 
@@ -21,11 +23,11 @@ class _ReportsListScreenState extends State<ReportsListScreen>
   late TabController _tabController;
 
   static const _tabs = [
-    (label: 'All', status: ''),
-    (label: 'Pending', status: 'received'),
-    (label: 'In Progress', status: 'in_progress'),
-    (label: 'Resolved', status: 'resolved'),
-    (label: 'Reopened', status: 'reopened'),
+    (label: 'Lahat', status: ''),
+    (label: 'Nakabinbin', status: 'received'),
+    (label: 'Ginagawa', status: 'in_progress'),
+    (label: 'Nalutas', status: 'resolved'),
+    (label: 'Binuksan', status: 'reopened'),
   ];
 
   @override
@@ -36,13 +38,10 @@ class _ReportsListScreenState extends State<ReportsListScreen>
   }
 
   void _loadReports() {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final reportsProvider =
-        Provider.of<ReportsProvider>(context, listen: false);
-    final id = authProvider.user?.anonymousId;
-    if (id != null) {
-      reportsProvider.loadReports(userId: id);
-    }
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final reports = Provider.of<ReportsProvider>(context, listen: false);
+    final id = auth.user?.anonymousId;
+    if (id != null) reports.loadReports(userId: id);
   }
 
   @override
@@ -51,13 +50,7 @@ class _ReportsListScreenState extends State<ReportsListScreen>
     super.dispose();
   }
 
-  // ── New report flow ───────────────────────────────────────────────────────
-  // 1. Open location picker → user drops pin
-  // 2. Store GPS in MessagesProvider
-  // 3. Navigate to chat/new
-
   Future<void> _startNewReport() async {
-    // Push location picker and wait for the result (a LatLng or null)
     final LatLng? picked = await Navigator.of(context).push<LatLng>(
       MaterialPageRoute(
         builder: (_) => const LocationPickerScreen(),
@@ -67,13 +60,11 @@ class _ReportsListScreenState extends State<ReportsListScreen>
 
     if (!mounted) return;
 
-    // Store coordinates (even if null — chat will still work via geocoding)
     if (picked != null) {
       Provider.of<MessagesProvider>(context, listen: false)
           .setGpsCoordinates(picked.latitude, picked.longitude);
     }
 
-    // Navigate to new report chat
     context.go('/chat/new');
   }
 
@@ -82,57 +73,82 @@ class _ReportsListScreenState extends State<ReportsListScreen>
     final reportsProvider = Provider.of<ReportsProvider>(context);
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('My Reports'),
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        title: const Text('Aking mga Report'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
             onPressed: _loadReports,
           ),
           IconButton(
-            icon: const Icon(Icons.map),
+            icon: const Icon(Icons.map_outlined, color: AppColors.textSecondary),
             onPressed: () => context.go('/map'),
           ),
+          const SizedBox(width: 4),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          tabs: _tabs
-              .map((t) => Tab(
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(49),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(bottom: BorderSide(color: AppColors.border)),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              indicatorColor: AppColors.primary,
+              indicatorWeight: 2.5,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+              tabs: _tabs.map((t) {
+                final count = _countFor(reportsProvider.reports, t.status);
+                return Tab(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(t.label),
-                        if (_countFor(reportsProvider.reports, t.status) > 0)
-                          ...[
+                        if (count > 0) ...[
                           const SizedBox(width: 6),
-                          _CountBadge(
-                            count: _countFor(
-                                reportsProvider.reports, t.status),
-                          ),
+                          _CountBadge(count: count, active: true),
                         ],
                       ],
                     ),
-                  ))
-              .toList(),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: _tabs
-            .map((t) => _ReportTabView(
-                  statusFilter: t.status,
-                  reportsProvider: reportsProvider,
-                  onRefresh: _loadReports,
-                  onTap: (id) => context.go('/reports/$id'),
-                ))
-            .toList(),
+        children: _tabs.map((t) => _ReportTabView(
+          statusFilter: t.status,
+          reportsProvider: reportsProvider,
+          onRefresh: _loadReports,
+          onTap: (id) => context.go('/reports/$id'),
+        )).toList(),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _startNewReport,
-        icon: const Icon(Icons.add_location_alt),
-        label: const Text('New Report'),
+        backgroundColor: AppColors.primary,
+        elevation: 0,
+        icon: const Icon(Icons.add_location_alt_rounded, color: Colors.white),
+        label: const Text(
+          'Bagong Report',
+          style: TextStyle(
+            fontFamily: 'Nunito',
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            fontSize: 14,
+          ),
+        ),
       ),
     );
   }
@@ -143,13 +159,13 @@ class _ReportsListScreenState extends State<ReportsListScreen>
   }
 }
 
-// ── Tab view ──────────────────────────────────────────────────────────────────
+// ── Tab View ──────────────────────────────────────────────────────────────────
 
 class _ReportTabView extends StatelessWidget {
   final String statusFilter;
   final ReportsProvider reportsProvider;
   final VoidCallback onRefresh;
-  final void Function(String reportId) onTap;
+  final void Function(String) onTap;
 
   const _ReportTabView({
     required this.statusFilter,
@@ -166,51 +182,33 @@ class _ReportTabView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (reportsProvider.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoader(message: 'Nilo-load...');
     }
 
     final items = _filtered;
 
     if (items.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              statusFilter.isEmpty
-                  ? Icons.report_problem_outlined
-                  : Icons.inbox_outlined,
-              size: 56,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              statusFilter.isEmpty
-                  ? 'No reports yet'
-                  : 'No ${statusFilter.replaceAll('_', ' ')} reports',
-              style: const TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              statusFilter.isEmpty
-                  ? 'Tap the + button to create your first report'
-                  : 'Reports with this status will appear here',
-              style: TextStyle(color: Colors.grey[600], fontSize: 13),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+      return EmptyStateView(
+        icon: statusFilter.isEmpty
+            ? Icons.report_problem_outlined
+            : Icons.inbox_outlined,
+        title: statusFilter.isEmpty
+            ? 'Wala pang mga report'
+            : 'Walang ${statusFilter.replaceAll('_', ' ')} na reports',
+        subtitle: statusFilter.isEmpty
+            ? 'Pindutin ang + para lumikha ng iyong unang report'
+            : 'Ang mga report na may status na ito ay makikita dito',
       );
     }
 
     return RefreshIndicator(
       onRefresh: () async => onRefresh(),
+      color: AppColors.primary,
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         itemCount: items.length,
         itemBuilder: (context, index) => Padding(
-          padding: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: ReportCard(
             report: items[index],
             onTap: () => onTap(items[index].id),
@@ -225,19 +223,26 @@ class _ReportTabView extends StatelessWidget {
 
 class _CountBadge extends StatelessWidget {
   final int count;
-  const _CountBadge({required this.count});
+  final bool active;
+
+  const _CountBadge({required this.count, this.active = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: Theme.of(context).primaryColor,
-        borderRadius: BorderRadius.circular(10),
+        color: active ? AppColors.primary : AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(AppRadius.full),
       ),
       child: Text(
         count.toString(),
-        style: const TextStyle(color: Colors.white, fontSize: 10),
+        style: TextStyle(
+          fontFamily: 'Nunito',
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: active ? Colors.white : AppColors.textMuted,
+        ),
       ),
     );
   }
