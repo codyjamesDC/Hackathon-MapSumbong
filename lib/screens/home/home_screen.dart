@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../models/report.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/app_components.dart';
 import '../../widgets/report_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -14,8 +16,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Save a direct reference so we can safely call it in dispose()
-  // without touching context after the widget is deactivated.
   ReportsProvider? _reportsProvider;
 
   @override
@@ -42,99 +42,126 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final reportsProvider = Provider.of<ReportsProvider>(context);
+    final user = authProvider.user;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('MapSumbong'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.map),
-            tooltip: 'View map',
-            onPressed: () => context.go('/map'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Sign out',
-            onPressed: () async {
-              await authProvider.signOut();
-              if (context.mounted) context.go('/auth');
-            },
-          ),
-        ],
-      ),
+      backgroundColor: AppColors.background,
       body: RefreshIndicator(
+        color: AppColors.primary,
         onRefresh: () async {
-          final id = authProvider.user?.anonymousId;
-          if (id != null) {
-            await reportsProvider.loadReports(userId: id);
-          }
+          final id = user?.anonymousId;
+          if (id != null) await reportsProvider.loadReports(userId: id);
         },
         child: CustomScrollView(
           slivers: [
-            // Welcome banner
-            SliverToBoxAdapter(
-              child: _WelcomeBanner(
-                displayName: authProvider.user?.getDisplayName(),
-                onReport: () => context.go('/reports'),
-              ),
-            ),
-
-            // Stats row
-            if (reportsProvider.reports.isNotEmpty)
-              SliverToBoxAdapter(
-                child: _StatsRow(reports: reportsProvider.reports),
-              ),
-
-            // Recent reports header
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 8, 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Recent Reports',
-                      style: TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold),
+            // ── Custom App Bar ─────────────────────────────────────────────
+            SliverAppBar(
+              expandedHeight: 200,
+              floating: false,
+              pinned: true,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              actions: [
+                IconButton(
+                  icon: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
                     ),
-                    TextButton(
-                      onPressed: () => context.go('/reports'),
-                      child: const Text('View all'),
+                    child: const Icon(Icons.map_outlined, color: Colors.white, size: 18),
+                  ),
+                  onPressed: () => context.go('/map'),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
                     ),
-                  ],
+                    child: const Icon(Icons.logout_rounded, color: Colors.white, size: 18),
+                  ),
+                  onPressed: () async {
+                    await authProvider.signOut();
+                    if (context.mounted) context.go('/auth');
+                  },
+                ),
+                const SizedBox(width: 8),
+              ],
+              flexibleSpace: FlexibleSpaceBar(
+                background: _HeroBanner(
+                  displayName: user?.getDisplayName(),
+                  reports: reportsProvider.reports,
                 ),
               ),
             ),
 
-            // Report list or empty state
+            // ── Stats Row ─────────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md, AppSpacing.lg, AppSpacing.md, 0),
+                child: _StatsRow(reports: reportsProvider.reports),
+              ),
+            ),
+
+            // ── Recent Reports ────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md, AppSpacing.lg, AppSpacing.md, AppSpacing.sm),
+                child: SectionHeader(
+                  title: 'Mga Kamakailang Report',
+                  action: 'Tingnan lahat',
+                  onAction: () => context.go('/reports'),
+                ),
+              ),
+            ),
+
             if (reportsProvider.isLoading)
-              const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator()),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(AppSpacing.xl),
+                  child: AppLoader(message: 'Nilo-load ang mga report...'),
+                ),
               )
             else if (reportsProvider.reports.isEmpty)
-              SliverFillRemaining(
-                child: _EmptyState(
-                    onCreateTap: () => context.go('/reports')),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+                  child: EmptyStateView(
+                    icon: Icons.report_problem_outlined,
+                    title: 'Wala pang mga report',
+                    subtitle: 'Tumulong sa iyong komunidad sa pag-uulat ng mga problema.',
+                    buttonLabel: 'Lumikha ng Report',
+                    onButton: () => context.go('/reports'),
+                  ),
+                ),
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md, 0, AppSpacing.md, 100),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      final report =
-                          reportsProvider.reports.take(5).toList()[index];
+                      final report = reportsProvider.reports
+                          .take(5)
+                          .toList()[index];
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                         child: ReportCard(
                           report: report,
-                          onTap: () =>
-                              context.go('/reports/${report.id}'),
+                          onTap: () => context.go('/reports/${report.id}'),
                         ),
                       );
                     },
-                    childCount: reportsProvider.reports.length
-                        .clamp(0, 5),
+                    childCount: reportsProvider.reports.length.clamp(0, 5),
                   ),
                 ),
               ),
@@ -143,58 +170,146 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.go('/reports'),
-        icon: const Icon(Icons.add),
-        label: const Text('New Report'),
+        backgroundColor: AppColors.primary,
+        elevation: 0,
+        icon: const Icon(Icons.add_location_alt_rounded, color: Colors.white),
+        label: const Text(
+          'Mag-ulat',
+          style: TextStyle(
+            fontFamily: 'Nunito',
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            fontSize: 14,
+          ),
+        ),
       ),
     );
   }
 }
 
-// ── Private sub-widgets ───────────────────────────────────────────────────────
+// ── Hero Banner ───────────────────────────────────────────────────────────────
 
-class _WelcomeBanner extends StatelessWidget {
+class _HeroBanner extends StatelessWidget {
   final String? displayName;
-  final VoidCallback onReport;
-  const _WelcomeBanner({this.displayName, required this.onReport});
+  final List<Report> reports;
+
+  const _HeroBanner({this.displayName, required this.reports});
+
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Magandang umaga';
+    if (hour < 17) return 'Magandang hapon';
+    return 'Magandang gabi';
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            Theme.of(context).primaryColor,
-            Theme.of(context).primaryColor.withOpacity(0.75),
-          ],
+          colors: [Color(0xFF1340B0), Color(0xFF1B4FD8), Color(0xFF2E63E8)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 60, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              // Greeting
+              Text(
+                '$_greeting!',
+                style: const TextStyle(
+                  fontFamily: 'Nunito',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                displayName ?? 'Residente',
+                style: const TextStyle(
+                  fontFamily: 'Nunito',
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Quick status row
+              if (reports.isNotEmpty)
+                _QuickStatus(reports: reports),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickStatus extends StatelessWidget {
+  final List<Report> reports;
+
+  const _QuickStatus({required this.reports});
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = reports.where((r) => r.status == 'received').length;
+    final resolved = reports.where((r) => r.status == 'resolved').length;
+
+    return Row(
+      children: [
+        _QuickChip(label: '${reports.length} total', icon: Icons.list_alt_rounded),
+        const SizedBox(width: 8),
+        if (pending > 0)
+          _QuickChip(
+            label: '$pending nakabinbin',
+            icon: Icons.pending_outlined,
+            color: Colors.amber.shade300,
+          ),
+        if (pending > 0) const SizedBox(width: 8),
+        _QuickChip(
+          label: '$resolved nalutas',
+          icon: Icons.check_circle_outline,
+          color: Colors.green.shade300,
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color? color;
+
+  const _QuickChip({required this.label, required this.icon, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(AppRadius.full),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          Icon(icon, size: 12, color: color ?? Colors.white),
+          const SizedBox(width: 5),
           Text(
-            'Hello, ${displayName ?? 'Resident'}!',
-            style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.white),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Report issues in your community and track their resolution.',
-            style: TextStyle(fontSize: 14, color: Colors.white70),
-          ),
-          const SizedBox(height: 14),
-          ElevatedButton.icon(
-            onPressed: onReport,
-            icon: const Icon(Icons.add),
-            label: const Text('Create Report'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.blue,
+            label,
+            style: TextStyle(
+              fontFamily: 'Nunito',
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: color ?? Colors.white,
             ),
           ),
         ],
@@ -203,112 +318,49 @@ class _WelcomeBanner extends StatelessWidget {
   }
 }
 
+// ── Stats Row ─────────────────────────────────────────────────────────────────
+
 class _StatsRow extends StatelessWidget {
   final List<Report> reports;
+
   const _StatsRow({required this.reports});
 
   @override
   Widget build(BuildContext context) {
-    final critical =
-        reports.where((r) => r.urgency == 'critical').length;
-    final pending =
-        reports.where((r) => r.status == 'received').length;
-    final resolved =
-        reports.where((r) => r.status == 'resolved').length;
+    final critical = reports.where((r) => r.urgency == 'critical').length;
+    final pending = reports.where((r) => r.status == 'received').length;
+    final resolved = reports.where((r) => r.status == 'resolved').length;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Row(
-        children: [
-          _StatCard(
-              label: 'Total', value: reports.length, color: Colors.blue),
-          const SizedBox(width: 8),
-          _StatCard(
-              label: 'Critical', value: critical, color: Colors.red),
-          const SizedBox(width: 8),
-          _StatCard(
-              label: 'Pending', value: pending, color: Colors.orange),
-          const SizedBox(width: 8),
-          _StatCard(
-              label: 'Resolved', value: resolved, color: Colors.green),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final int value;
-  final Color color;
-  const _StatCard(
-      {required this.label, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.2)),
+    return Row(
+      children: [
+        StatCard(
+          label: 'Lahat',
+          value: reports.length.toString(),
+          color: AppColors.primary,
+          icon: Icons.folder_open_rounded,
         ),
-        child: Column(
-          children: [
-            Text(
-              value.toString(),
-              style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: color),
-            ),
-            const SizedBox(height: 2),
-            Text(label,
-                style:
-                    const TextStyle(fontSize: 11, color: Colors.grey)),
-          ],
+        const SizedBox(width: 8),
+        StatCard(
+          label: 'Kritikal',
+          value: critical.toString(),
+          color: AppColors.critical,
+          icon: Icons.warning_amber_rounded,
         ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final VoidCallback onCreateTap;
-  const _EmptyState({required this.onCreateTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.report_problem_outlined,
-                size: 72, color: Colors.grey),
-            const SizedBox(height: 20),
-            const Text(
-              'No reports yet',
-              style:
-                  TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Help your community by reporting issues like floods, road damage, or waste.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 14),
-            ),
-            const SizedBox(height: 28),
-            ElevatedButton.icon(
-              onPressed: onCreateTap,
-              icon: const Icon(Icons.add),
-              label: const Text('Create your first report'),
-            ),
-          ],
+        const SizedBox(width: 8),
+        StatCard(
+          label: 'Nakabinbin',
+          value: pending.toString(),
+          color: AppColors.medium,
+          icon: Icons.hourglass_top_rounded,
         ),
-      ),
+        const SizedBox(width: 8),
+        StatCard(
+          label: 'Nalutas',
+          value: resolved.toString(),
+          color: AppColors.low,
+          icon: Icons.task_alt_rounded,
+        ),
+      ],
     );
   }
 }
