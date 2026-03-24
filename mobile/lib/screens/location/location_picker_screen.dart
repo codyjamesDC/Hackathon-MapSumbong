@@ -24,7 +24,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   void initState() {
     super.initState();
     // Immediately request permission and fly to device location
-    WidgetsBinding.instance.addPostFrameCallback((_) => _goToMyLocation());
+    // WidgetsBinding.instance.addPostFrameCallback((_) => _goToMyLocation());
   }
 
   // ── GPS ───────────────────────────────────────────────────────────────────

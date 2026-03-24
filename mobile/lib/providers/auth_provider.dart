@@ -14,19 +14,24 @@ class AuthProvider with ChangeNotifier {
   bool get isAuthenticated => _user != null;
 
   AuthProvider() {
+    print('🔐 AuthProvider initializing...');
     _initializeAuth();
   }
 
   void _initializeAuth() {
-    // Check existing session on startup
-    final currentUser = AuthService.getCurrentUser();
-    if (currentUser != null) {
-      _user = currentUser;
-    }
-
-    // Listen to Supabase auth state changes
-    AuthService.onAuthStateChange().listen(_handleAuthStateChange);
+  print('🔐 Checking existing session...');
+  final currentUser = AuthService.getCurrentUser();
+  if (currentUser != null) {
+    print('✓ Found existing user: ${currentUser.id}');
+    _user = currentUser;
+  } else {
+    print('ℹ No existing session found');
   }
+
+  print('🔐 Setting up auth state listener...');
+  AuthService.onAuthStateChange().listen(_handleAuthStateChange);
+  print('✓ Auth provider initialized');
+}
 
   void _handleAuthStateChange(supabase.AuthState event) {
     switch (event.event) {
