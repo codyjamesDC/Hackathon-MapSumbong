@@ -47,31 +47,45 @@ class Report {
     required this.updatedAt,
   });
 
+  static double _asDouble(dynamic value, double fallback) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? fallback;
+    return fallback;
+  }
+
+  static DateTime _asDate(dynamic value, DateTime fallback) {
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value) ?? fallback;
+    }
+    return fallback;
+  }
+
   factory Report.fromJson(Map<String, dynamic> json) {
+    final now = DateTime.now();
     return Report(
-      id: json['id'] as String,
-      reporterAnonymousId: json['reporter_anonymous_id'] as String,
-      issueType: json['issue_type'] as String,
-      description: json['description'] as String,
+      id: (json['id'] ?? '').toString(),
+      reporterAnonymousId: (json['reporter_anonymous_id'] ?? 'ANON-UNKNOWN').toString(),
+      issueType: (json['issue_type'] ?? 'other').toString(),
+      description: (json['description'] ?? '').toString(),
       photoUrl: json['photo_url'] as String?,
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
+      latitude: _asDouble(json['latitude'], 14.6942),
+      longitude: _asDouble(json['longitude'], 120.9834),
       locationText: json['location_text'] as String?,
-      barangay: json['barangay'] as String,
+      barangay: (json['barangay'] ?? 'unknown').toString(),
       purok: json['purok'] as String?,
-      urgency: json['urgency'] as String,
+      urgency: (json['urgency'] ?? 'medium').toString(),
       sdgTag: json['sdg_tag'] as String?,
-      status: json['status'] as String,
+      status: (json['status'] ?? 'received').toString(),
       resolutionNote: json['resolution_note'] as String?,
       resolutionPhotoUrl: json['resolution_photo_url'] as String?,
       residentConfirmed: json['resident_confirmed'] as bool?,
       resolvedAt: json['resolved_at'] != null
-          ? DateTime.parse(json['resolved_at'] as String)
+          ? DateTime.tryParse(json['resolved_at'].toString())
           : null,
       resolvedBy: json['resolved_by'] as String?,
       isDeleted: json['is_deleted'] as bool? ?? false,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: _asDate(json['created_at'], now),
+      updatedAt: _asDate(json['updated_at'], now),
     );
   }
 

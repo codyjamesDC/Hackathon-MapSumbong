@@ -1,5 +1,7 @@
 .env
 /backend/.env
+/mobile/.env
+/frontend/.env
 
 # Miscellaneous
 *.class
@@ -46,3 +48,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+.git/
+venv/
+.venv/
+node_modules/*

@@ -46,32 +46,38 @@ async def get_reports(
     limit: int = 100,
     offset: int = 0,
 ):
-    supabase = _get_supabase()
-    query = supabase.table('reports').select('*').eq('is_deleted', False)
+    try:
+        supabase = _get_supabase()
+        query = supabase.table('reports').select('*').eq('is_deleted', False)
 
-    if status:
-        query = query.eq('status', status)
-    if barangay:
-        query = query.eq('barangay', barangay)
-    if urgency:
-        query = query.eq('urgency', urgency)
-    if issue_type:
-        query = query.eq('issue_type', issue_type)
+        if status:
+            query = query.eq('status', status)
+        if barangay:
+            query = query.eq('barangay', barangay)
+        if urgency:
+            query = query.eq('urgency', urgency)
+        if issue_type:
+            query = query.eq('issue_type', issue_type)
 
-    query = query.order('created_at', desc=True).range(offset, offset + limit - 1)
-    response = query.execute()
+        query = query.order('created_at', desc=True).range(offset, offset + limit - 1)
+        response = query.execute()
 
-    return {
-        'reports': response.data,
-        'total': len(response.data),
-        'limit': limit,
-        'offset': offset,
-    }
+        return {
+            'reports': response.data,
+            'total': len(response.data),
+            'limit': limit,
+            'offset': offset,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get('/reports/{report_id}')
 async def get_report(report_id: str):
-    response = _get_supabase().table('reports').select('*').eq('id', report_id).execute()
+    try:
+        response = _get_supabase().table('reports').select('*').eq('id', report_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
     if not response.data:
         raise HTTPException(status_code=404, detail='Report not found')
@@ -90,7 +96,14 @@ async def update_report_status(report_id: str, request: UpdateStatusRequest):
         update_data['resolution_photo_url'] = request.resolution_photo_url
 
     try:
-        supabase.table('reports').update(update_data).eq('id', report_id).execute()
+        existing = supabase.table('reports').select('id').eq('id', report_id).limit(1).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail='Report not found')
+
+        update_result = supabase.table('reports').update(update_data).eq('id', report_id).execute()
+        if update_result.data is not None and len(update_result.data) == 0:
+            raise HTTPException(status_code=404, detail='Report not found')
+
         supabase.table('audit_log').insert({
             'report_id': report_id,
             'action': 'status_change',
@@ -109,10 +122,16 @@ async def update_report_status(report_id: str, request: UpdateStatusRequest):
 async def delete_report(report_id: str, request: DeleteReportRequest):
     supabase = _get_supabase()
     try:
-        supabase.table('reports').update({
+        existing = supabase.table('reports').select('id').eq('id', report_id).limit(1).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail='Report not found')
+
+        update_result = supabase.table('reports').update({
             'is_deleted': True,
             'deleted_by': request.deleted_by,
         }).eq('id', report_id).execute()
+        if update_result.data is not None and len(update_result.data) == 0:
+            raise HTTPException(status_code=404, detail='Report not found')
 
         result = supabase.table('audit_log').insert({
             'report_id': report_id,
@@ -137,15 +156,18 @@ async def get_clusters(
     alerted: Optional[bool] = None,
     limit: int = 50,
 ):
-    query = _get_supabase().table('clusters').select('*')
+    try:
+        query = _get_supabase().table('clusters').select('*')
 
-    if barangay:
-        query = query.eq('barangay', barangay)
-    if alerted is not None:
-        query = query.eq('alerted', alerted)
+        if barangay:
+            query = query.eq('barangay', barangay)
+        if alerted is not None:
+            query = query.eq('alerted', alerted)
 
-    response = query.order('created_at', desc=True).limit(limit).execute()
-    return {'clusters': response.data, 'total': len(response.data)}
+        response = query.order('created_at', desc=True).limit(limit).execute()
+        return {'clusters': response.data, 'total': len(response.data)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get('/audit-log')
@@ -155,12 +177,15 @@ async def get_audit_log(
     limit: int = 50,
     offset: int = 0,
 ):
-    query = _get_supabase().table('audit_log').select('*')
+    try:
+        query = _get_supabase().table('audit_log').select('*')
 
-    if report_id:
-        query = query.eq('report_id', report_id)
-    if action:
-        query = query.eq('action', action)
+        if report_id:
+            query = query.eq('report_id', report_id)
+        if action:
+            query = query.eq('action', action)
 
-    response = query.order('created_at', desc=True).range(offset, offset + limit - 1).execute()
-    return {'logs': response.data, 'total': len(response.data)}
+        response = query.order('created_at', desc=True).range(offset, offset + limit - 1).execute()
+        return {'logs': response.data, 'total': len(response.data)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

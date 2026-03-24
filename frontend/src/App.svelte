@@ -22,18 +22,28 @@
     }
   });
 
-  onMount(async () => {
-    try {
-      const live = await fetchIncidents();
-      if (live && live.length > 0) {
-        incidents.set(live);
-        ws = subscribeToIncidents(
-          (n) => { incidents.update(l => [n, ...l]); toastMsg.set(`New report via ${n.channel}`); },
-          (u) => { incidents.update(l => l.map(i => i.id === u.id ? u : i)); }
-        );
-      }
-    } catch {}
-    return () => { if (ws) ws.close(); };
+  onMount(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        const live = await fetchIncidents();
+        if (mounted && live) {
+          incidents.set(live);
+        }
+      } catch {}
+
+      if (!mounted) return;
+      ws = subscribeToIncidents(
+        (n) => { incidents.update(l => [n, ...l]); toastMsg.set(`New report via ${n.channel}`); },
+        (u) => { incidents.update(l => l.map(i => i.id === u.id ? u : i)); }
+      );
+    })();
+
+    return () => {
+      mounted = false;
+      if (ws) ws.close();
+    };
   });
 </script>
 

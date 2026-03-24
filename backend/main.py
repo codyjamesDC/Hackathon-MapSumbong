@@ -4,6 +4,7 @@ load_dotenv()  # Must be first — before any service imports read os.getenv()
 import uuid
 import json
 import os
+from datetime import datetime
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -110,7 +111,7 @@ async def process_message(payload: dict):
             # On the FIRST turn only, if GPS coords were provided,
             # reverse-geocode them and inject location context so Gemini
             # never needs to ask for the barangay.
-            if latitude and longitude:
+            if latitude is not None and longitude is not None:
                 location_info = await _reverse_geocode(latitude, longitude)
                 if location_info:
                     # Prepend a hidden system note to the conversation
@@ -165,7 +166,7 @@ async def process_message(payload: dict):
             report_data, is_complete = await _extract_report_data(history)
 
         # Always inject GPS into report_data if provided
-        if report_data and latitude and longitude:
+        if report_data and latitude is not None and longitude is not None:
             report_data['latitude'] = report_data.get('latitude') or latitude
             report_data['longitude'] = report_data.get('longitude') or longitude
 
@@ -177,6 +178,8 @@ async def process_message(payload: dict):
             'report_data': report_data,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f'submit_report error: {e}')
         return {'success': False, 'error': str(e)}
@@ -319,6 +322,39 @@ async def submit_report(payload: dict):
 
     except Exception as e:
         print(f'submit_report error: {e}')
+        return {'success': False, 'error': str(e)}
+
+
+@app.post('/send-message')
+async def send_message(payload: dict):
+    try:
+        supabase = _get_supabase()
+        report_id = payload.get('report_id')
+        sender_id = payload.get('sender_id')
+        sender_type = payload.get('sender_type')
+        content = payload.get('content', '').strip()
+
+        if not report_id or not sender_id or not sender_type or not content:
+            raise HTTPException(
+                status_code=400,
+                detail='report_id, sender_id, sender_type, and content are required',
+            )
+
+        message = {
+            'report_id': report_id,
+            'sender_id': sender_id,
+            'sender_type': sender_type,
+            'content': content,
+            'message_type': payload.get('message_type', 'text'),
+            'image_url': payload.get('image_url'),
+            'timestamp': datetime.utcnow().isoformat(),
+        }
+        result = supabase.table('messages').insert(message).execute()
+        return {'success': True, 'message': result.data[0] if result.data else message}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f'send_message error: {e}')
         return {'success': False, 'error': str(e)}
 
 

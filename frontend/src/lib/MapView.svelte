@@ -8,6 +8,7 @@
   let map;
   let markerLayer = {};
   let circleLayer = {};
+  let markerSnapshot = {};
   let currentTile = null;
   let styleMenuOpen = false;
   let activeStyle = 'dark';
@@ -101,10 +102,30 @@
 
   function renderAll($incs) {
     if (!map) return;
-    Object.values(markerLayer).forEach(m => m.remove());
-    Object.values(circleLayer).forEach(c => c.remove());
-    markerLayer = {}; circleLayer = {};
+    const nextById = {};
     [...$incs].sort((a,b) => ORDER[b.severity]-ORDER[a.severity]).forEach(inc => {
+      nextById[inc.id] = inc;
+    });
+
+    // Remove layers that are no longer present.
+    Object.keys(markerLayer).forEach((id) => {
+      if (!nextById[id]) {
+        markerLayer[id].remove();
+        circleLayer[id]?.remove();
+        delete markerLayer[id];
+        delete circleLayer[id];
+        delete markerSnapshot[id];
+      }
+    });
+
+    // Upsert changed/new markers and circles.
+    Object.values(nextById).forEach(inc => {
+      const snap = `${inc.lat}|${inc.lng}|${inc.severity}|${inc.resolved}|${inc.reports}|${inc.radius}|${inc.category}`;
+      if (markerSnapshot[inc.id] === snap) return;
+
+      markerLayer[inc.id]?.remove();
+      circleLayer[inc.id]?.remove();
+
       const col = inc.resolved ? '#00c896' : SEV_COLORS[inc.severity];
       const circle = L.circle([inc.lat,inc.lng], {
         radius: inc.radius, color: col, fillColor: col,
@@ -120,6 +141,7 @@
       }).addTo(map);
       m.on('click', () => selectedIncident.set(inc));
       markerLayer[inc.id] = m;
+      markerSnapshot[inc.id] = snap;
     });
   }
 

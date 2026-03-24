@@ -37,18 +37,24 @@ export async function fetchIncidents() {
 export async function resolveIncident(id) {
   if (!SUPABASE_URL) return;
 
-  await fetch(`${SUPABASE_URL}/rest/v1/reports?id=eq.${id}`, {
+  const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/reports?id=eq.${id}`, {
     method: 'PATCH',
     headers,
     body: JSON.stringify({ status: 'resolved'})
   });
+  if (!updateRes.ok) {
+    throw new Error(`Failed to resolve incident ${id}`);
+  }
 
   // Trigger Edge Function to send resolution SMS to reporter
-  await fetch(`${SUPABASE_URL}/functions/v1/send-resolution-sms`, {
+  const smsRes = await fetch(`${SUPABASE_URL}/functions/v1/send-resolution-sms`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ incident_id: id })
   });
+  if (!smsRes.ok) {
+    throw new Error(`Resolved but SMS trigger failed for ${id}`);
+  }
 }
 
 /**
@@ -72,19 +78,28 @@ export function subscribeToIncidents(onInsert, onUpdate) {
     ws.send(JSON.stringify({
       topic: 'realtime:public:reports',
       event: 'phx_join',
-      payload: {},
+      payload: {
+        config: {
+          broadcast: { ack: false, self: false },
+          presence: { key: '' },
+          postgres_changes: [{ event: '*', schema: 'public', table: 'reports' }]
+        }
+      },
       ref: null
     }));
   };
 
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
-    if (msg.event === 'INSERT' && msg.payload?.record) {
-      onInsert(mapRow(msg.payload.record));
+    // Newer Supabase realtime payload shape
+    if (msg.event === 'postgres_changes' && msg.payload?.data) {
+      const change = msg.payload.data;
+      if (change.type === 'INSERT' && change.record) onInsert(mapRow(change.record));
+      if (change.type === 'UPDATE' && change.record) onUpdate(mapRow(change.record));
     }
-    if (msg.event === 'UPDATE' && msg.payload?.record) {
-      onUpdate(mapRow(msg.payload.record));
-    }
+    // Legacy/fallback shape
+    if (msg.event === 'INSERT' && msg.payload?.record) onInsert(mapRow(msg.payload.record));
+    if (msg.event === 'UPDATE' && msg.payload?.record) onUpdate(mapRow(msg.payload.record));
   };
 
   return ws;

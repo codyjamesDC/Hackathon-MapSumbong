@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
+import 'dart:async';
 import '../models/user.dart' as app_user;
 import '../services/auth_service.dart';
 
@@ -7,6 +8,8 @@ class AuthProvider with ChangeNotifier {
   app_user.User? _user;
   bool _isLoading = false;
   String? _error;
+  int _activeAuthOp = 0;
+  StreamSubscription<supabase.AuthState>? _authStateSub;
 
   app_user.User? get user => _user;
   bool get isLoading => _isLoading;
@@ -19,19 +22,19 @@ class AuthProvider with ChangeNotifier {
   }
 
   void _initializeAuth() {
-  print('🔐 Checking existing session...');
-  final currentUser = AuthService.getCurrentUser();
-  if (currentUser != null) {
-    print('✓ Found existing user: ${currentUser.id}');
-    _user = currentUser;
-  } else {
-    print('ℹ No existing session found');
-  }
+    print('🔐 Checking existing session...');
+    final currentUser = AuthService.getCurrentUser();
+    if (currentUser != null) {
+      print('✓ Found existing user: ${currentUser.id}');
+      _user = currentUser;
+    } else {
+      print('ℹ No existing session found');
+    }
 
-  print('🔐 Setting up auth state listener...');
-  AuthService.onAuthStateChange().listen(_handleAuthStateChange);
-  print('✓ Auth provider initialized');
-}
+    print('🔐 Setting up auth state listener...');
+    _authStateSub = AuthService.onAuthStateChange().listen(_handleAuthStateChange);
+    print('✓ Auth provider initialized');
+  }
 
   void _handleAuthStateChange(supabase.AuthState event) {
     switch (event.event) {
@@ -53,11 +56,24 @@ class AuthProvider with ChangeNotifier {
       default:
         break;
     }
-    _isLoading = false;
+    // Auth stream callbacks can arrive late under slow networks. We still
+    // update user state, but we avoid unexpectedly flipping loading state for
+    // an unrelated/newer auth operation.
+    if (_activeAuthOp == 0) {
+      _isLoading = false;
+    }
     notifyListeners();
   }
 
+  int _beginAuthOp() {
+    _activeAuthOp += 1;
+    return _activeAuthOp;
+  }
+
+  bool _isStaleOp(int opId) => opId != _activeAuthOp;
+
   Future<void> signInWithPhone(String phoneNumber) async {
+    final opId = _beginAuthOp();
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -65,26 +81,32 @@ class AuthProvider with ChangeNotifier {
     try {
       await AuthService.signInWithPhone(phoneNumber);
     } catch (e) {
+      if (_isStaleOp(opId)) return;
       _error = _friendlyError(e.toString());
     } finally {
+      if (_isStaleOp(opId)) return;
       _isLoading = false;
       notifyListeners();
     }
   }
 
   Future<void> verifyOTP(String phoneNumber, String otp) async {
+    final opId = _beginAuthOp();
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       final response = await AuthService.verifyOTP(phoneNumber, otp);
+      if (_isStaleOp(opId)) return;
       if (response.user != null) {
         _user = app_user.User.fromSupabaseUser(response.user!);
       }
     } catch (e) {
+      if (_isStaleOp(opId)) return;
       _error = _friendlyError(e.toString());
     } finally {
+      if (_isStaleOp(opId)) return;
       _isLoading = false;
       notifyListeners();
     }
@@ -94,12 +116,14 @@ class AuthProvider with ChangeNotifier {
   /// This lets you test the app without a working SMS provider.
   /// Call [signOut] to clear it.
   Future<void> signInAsGuest() async {
+    final opId = _beginAuthOp();
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     // Small artificial delay so the button feels responsive
     await Future.delayed(const Duration(milliseconds: 400));
+    if (_isStaleOp(opId)) return;
 
     _user = app_user.User(
       id: 'dev-guest-001',
@@ -117,6 +141,7 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    final opId = _beginAuthOp();
     _isLoading = true;
     notifyListeners();
 
@@ -125,11 +150,14 @@ class AuthProvider with ChangeNotifier {
       if (AuthService.isAuthenticated()) {
         await AuthService.signOut();
       }
+      if (_isStaleOp(opId)) return;
       _user = null;
       _error = null;
     } catch (e) {
+      if (_isStaleOp(opId)) return;
       _error = e.toString();
     } finally {
+      if (_isStaleOp(opId)) return;
       _isLoading = false;
       notifyListeners();
     }
@@ -141,6 +169,7 @@ class AuthProvider with ChangeNotifier {
     String? purok,
   }) async {
     if (_user == null) return;
+    final opId = _beginAuthOp();
     _isLoading = true;
     notifyListeners();
 
@@ -164,15 +193,25 @@ class AuthProvider with ChangeNotifier {
           barangay: barangay,
           purok: purok,
         );
+        if (_isStaleOp(opId)) return;
         final updated = await AuthService.getUserProfile(_user!.id);
         if (updated != null) _user = updated;
       }
     } catch (e) {
+      if (_isStaleOp(opId)) return;
       _error = e.toString();
     } finally {
+      if (_isStaleOp(opId)) return;
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    _authStateSub?.cancel();
+    _authStateSub = null;
+    super.dispose();
   }
 
   void clearError() {
