@@ -20,14 +20,33 @@ import 'theme/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await dotenv.load(fileName: '.env');
+  try {
+    await dotenv.load(fileName: '.env');
+    print('✓ Environment variables loaded');
 
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
-  );
+    final supabaseUrl = dotenv.env['SUPABASE_URL'];
+    final supabaseKey = dotenv.env['SUPABASE_ANON_KEY'];
 
-  await NotificationService.initialize();
+    if (supabaseUrl == null || supabaseKey == null) {
+      throw Exception('Missing Supabase credentials in .env file');
+    }
+
+    print('✓ Initializing Supabase...');
+    await Supabase.initialize(
+      url: supabaseUrl,
+      anonKey: supabaseKey,
+    );
+    print('✓ Supabase initialized successfully');
+
+    print('✓ Initializing notifications...');
+    await NotificationService.initialize();
+    print('✓ Notifications initialized');
+
+  } catch (e, stackTrace) {
+    print('❌ Initialization error: $e');
+    print('Stack trace: $stackTrace');
+    // Show error to user
+  }
 
   runApp(const MapSumbongApp());
 }
