@@ -86,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
           slivers: [
             // ── Custom App Bar ─────────────────────────────────────────────
             SliverAppBar(
-              expandedHeight: 200,
+              expandedHeight: 248,
               floating: false,
               pinned: true,
               backgroundColor: AppColors.primary,
@@ -259,7 +259,7 @@ class _HeroBanner extends StatelessWidget {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 60, 20, 24),
+          padding: const EdgeInsets.fromLTRB(20, 48, 20, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.end,
@@ -285,11 +285,11 @@ class _HeroBanner extends StatelessWidget {
                   letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               // Quick status row
               if (reports.isNotEmpty)
                 _QuickStatus(reports: reports),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               ElevatedButton.icon(
                 onPressed: onQuickReport,
                 style: ElevatedButton.styleFrom(
