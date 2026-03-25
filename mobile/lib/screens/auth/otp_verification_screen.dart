@@ -193,7 +193,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               const SizedBox(height: 24),
 
               // Title
-              const Text(
+              Text(
                 'Ilagay ang 6-digit code',
                 style: titleStyle,
               ),
