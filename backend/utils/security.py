@@ -8,10 +8,15 @@ from fastapi import Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 
 
-JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
-JWT_SECRET = os.getenv('JWT_SECRET', '')
 RATE_LIMIT_REQUESTS = int(os.getenv('RATE_LIMIT_REQUESTS', '60'))
 RATE_LIMIT_WINDOW_SEC = int(os.getenv('RATE_LIMIT_WINDOW_SEC', '60'))
+
+
+def _get_jwt_settings() -> tuple[str, str]:
+    """Read JWT settings at call time so env changes are reflected immediately."""
+    algorithm = os.getenv('JWT_ALGORITHM', 'HS256')
+    secret = os.getenv('JWT_SECRET', '')
+    return algorithm, secret
 
 
 def _extract_bearer_token(authorization: str | None) -> str:
@@ -28,10 +33,12 @@ def verify_jwt_token(token: str) -> dict[str, Any]:
     Accepts custom tokens with `role`, or Supabase user JWTs (`role: authenticated`).
     Optional `app_metadata.role` can elevate to `admin`.
     """
-    if not JWT_SECRET:
+    jwt_algorithm, jwt_secret = _get_jwt_settings()
+
+    if not jwt_secret:
         raise HTTPException(status_code=500, detail='JWT secret is not configured')
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, jwt_secret, algorithms=[jwt_algorithm])
         if not isinstance(payload, dict):
             raise HTTPException(status_code=401, detail='Invalid token payload')
         raw = payload.get('role', 'user')
