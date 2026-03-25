@@ -15,6 +15,7 @@ import 'screens/reports/report_detail_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'screens/map/map_screen.dart';
 import 'screens/location/location_picker_screen.dart';
+import 'screens/profile/profile_screen.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -125,6 +126,10 @@ GoRouter _buildRouter() {
       GoRoute(
         path: '/map',
         builder: (context, state) => const MapScreen(),
+      ),
+      GoRoute(
+        path: '/profile',
+        builder: (context, state) => const ProfileScreen(),
       ),
       // Location picker — navigated to imperatively via Navigator.push
       // so it can return a LatLng value back to the caller

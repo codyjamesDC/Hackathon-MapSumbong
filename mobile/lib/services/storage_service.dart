@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 class StorageService {
   static final SupabaseClient _supabase = Supabase.instance.client;
   static const String _bucket = 'photos';
+  static const int _maxUploadAttempts = 3;
 
   /// Pick an image from [source], upload to Supabase storage,
   /// and return the public URL. Returns null if cancelled or failed.
@@ -39,33 +40,38 @@ class StorageService {
     required File file,
     required String uploaderId,
   }) async {
-    try {
-      // Build a unique file path: uploaderId/timestamp.ext
-      final ext = file.path.split('.').last.toLowerCase();
-      final safeId = uploaderId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-      final fileName =
-          '$safeId/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    // Build a unique file path: uploaderId/timestamp.ext
+    final ext = file.path.split('.').last.toLowerCase();
+    final safeId = uploaderId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final fileName =
+        '$safeId/${DateTime.now().millisecondsSinceEpoch}.$ext';
 
-      final bytes = await file.readAsBytes();
+    final bytes = await file.readAsBytes();
 
-      await _supabase.storage.from(_bucket).uploadBinary(
-            fileName,
-            bytes,
-            fileOptions: FileOptions(
-              contentType: 'image/$ext',
-              cacheControl: '3600',
-              upsert: false,
-            ),
-          );
+    for (var attempt = 1; attempt <= _maxUploadAttempts; attempt++) {
+      try {
+        await _supabase.storage.from(_bucket).uploadBinary(
+              fileName,
+              bytes,
+              fileOptions: FileOptions(
+                contentType: 'image/$ext',
+                cacheControl: '3600',
+                upsert: false,
+              ),
+            );
 
-      final publicUrl =
-          _supabase.storage.from(_bucket).getPublicUrl(fileName);
-
-      debugPrint('StorageService: uploaded → $publicUrl');
-      return publicUrl;
-    } catch (e) {
-      debugPrint('StorageService.uploadFile error: $e');
-      return null;
+        final publicUrl = _supabase.storage.from(_bucket).getPublicUrl(fileName);
+        debugPrint('StorageService: uploaded → $publicUrl');
+        return publicUrl;
+      } catch (e) {
+        debugPrint('StorageService.uploadFile attempt $attempt failed: $e');
+        if (attempt == _maxUploadAttempts) {
+          return null;
+        }
+        await Future.delayed(Duration(milliseconds: 350 * attempt));
+      }
     }
+
+    return null;
   }
 }

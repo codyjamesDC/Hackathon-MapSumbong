@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../models/report.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/app_components.dart';
 
 class ReportDetailScreen extends StatefulWidget {
   final String reportId;
@@ -27,32 +30,132 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     });
   }
 
+  Future<void> _refreshReport() {
+    return Provider.of<ReportsProvider>(context, listen: false)
+        .selectReport(widget.reportId);
+  }
+
   @override
   Widget build(BuildContext context) {
     final reportsProvider = Provider.of<ReportsProvider>(context);
     final report = reportsProvider.selectedReport;
 
-    if (reportsProvider.isLoading) {
+    final appBar = AppBar(
+      backgroundColor: AppColors.surface,
+      elevation: 0,
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(height: 1, color: AppColors.border),
+      ),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_rounded, size: 18),
+        color: AppColors.textPrimary,
+        onPressed: () =>
+            Navigator.of(context).canPop() ? context.pop() : context.go('/reports'),
+      ),
+      title: Text(
+        report != null ? 'Report ${report.id}' : 'Report',
+        style: const TextStyle(
+          fontFamily: 'Nunito',
+          fontWeight: FontWeight.w700,
+          fontSize: 16,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      actions: [
+        if (report != null)
+          IconButton(
+            icon: const Icon(Icons.chat_rounded, color: AppColors.primary),
+            tooltip: 'Chat with authorities',
+            onPressed: () => context.go('/chat/${report.id}'),
+          ),
+      ],
+    );
+
+    if (reportsProvider.isLoading && report == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Report Details')),
-        body: const Center(child: CircularProgressIndicator()),
+        backgroundColor: AppColors.background,
+        appBar: appBar,
+        body: const AppLoader(message: 'Nilo-load ang report...'),
+      );
+    }
+
+    if (reportsProvider.selectError != null && report == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: appBar,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.cloud_off_rounded,
+                    size: 56, color: AppColors.textMuted),
+                const SizedBox(height: 16),
+                Text(
+                  'Hindi ma-load ang report',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  reportsProvider.selectError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 13,
+                    color: AppColors.textMuted,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: _refreshReport,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Subukan ulit'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => context.go('/reports'),
+                  child: const Text('Bumalik sa listahan'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
     if (report == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Report Details')),
+        backgroundColor: AppColors.background,
+        appBar: appBar,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+              const Icon(Icons.search_off_rounded,
+                  size: 56, color: AppColors.textMuted),
               const SizedBox(height: 16),
-              const Text('Report not found'),
+              const Text(
+                'Hindi natagpuan ang report',
+                style: TextStyle(
+                  fontFamily: 'Nunito',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
               const SizedBox(height: 16),
-              ElevatedButton(
+              OutlinedButton(
                 onPressed: () => context.go('/reports'),
-                child: const Text('Back to reports'),
+                child: const Text('Bumalik sa listahan'),
               ),
             ],
           ),
@@ -61,20 +164,14 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Report ${report.id}'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.chat),
-            tooltip: 'Chat with authorities',
-            onPressed: () => context.go('/chat/${report.id}'),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: AppColors.background,
+      appBar: appBar,
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: _refreshReport,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
             // Status banner
             _StatusBanner(status: report.status),
@@ -302,11 +399,31 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               Navigator.pop(ctx);
               final provider =
                   Provider.of<ReportsProvider>(context, listen: false);
-              await provider.updateReportStatus(report.id, 'reopened');
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Report reopened.')),
+              final anon = Provider.of<AuthProvider>(context, listen: false)
+                  .user
+                  ?.anonymousId;
+              try {
+                await provider.updateReportStatus(
+                  report.id,
+                  'reopened',
+                  resolutionNote: reasonCtrl.text.trim(),
+                  updatedBy: anon,
                 );
+                await provider.selectReport(report.id);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Report reopened.')),
+                  );
+                }
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(provider.error ?? 'Hindi na-reopen.'),
+                      backgroundColor: AppColors.critical,
+                    ),
+                  );
+                }
               }
             },
             child: const Text('Reopen'),

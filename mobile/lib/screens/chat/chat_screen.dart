@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/messages_provider.dart';
+import '../../providers/reports_provider.dart';
 import '../../models/message.dart';
 import '../../theme/app_theme.dart';
 import '../../services/storage_service.dart';
@@ -33,7 +34,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _messagesProvider.loadMessages(widget.reportId);
         _messagesProvider.subscribeToMessages(widget.reportId);
       } else {
-        _messagesProvider.clearMessages();
+        _messagesProvider.clearMessages(preserveGps: true);
       }
     });
   }
@@ -137,12 +138,22 @@ class _ChatScreenState extends State<ChatScreen> {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     if (auth.user == null) return;
 
-    await _messagesProvider.sendMessageWithAI(
-      widget.reportId,
-      content,
-      imageUrl: imageUrl ?? _attachedPhotoUrl,
-      reporterAnonymousId: auth.user!.anonymousId,
-    );
+    if (_isNewReport) {
+      await _messagesProvider.sendMessageWithAI(
+        widget.reportId,
+        content,
+        imageUrl: imageUrl ?? _attachedPhotoUrl,
+        reporterAnonymousId: auth.user!.anonymousId,
+      );
+    } else {
+      await _messagesProvider.sendAuthorityMessage(
+        reportId: widget.reportId,
+        senderId: auth.user!.anonymousId,
+        senderType: 'resident',
+        content: content,
+        imageUrl: imageUrl ?? _attachedPhotoUrl,
+      );
+    }
 
     if (_attachedPhotoUrl != null) setState(() => _attachedPhotoUrl = null);
     _scrollToBottom();
@@ -152,8 +163,18 @@ class _ChatScreenState extends State<ChatScreen> {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     if (auth.user == null) return;
 
-    final reportId = await _messagesProvider
-        .submitPendingReport(auth.user!.anonymousId);
+    final reportId = await _messagesProvider.submitPendingReport(
+      auth.user!.anonymousId,
+      photoUrl: _attachedPhotoUrl,
+    );
+
+    if (!mounted) return;
+
+    if (reportId != null) {
+      await Provider.of<ReportsProvider>(context, listen: false).loadReports(
+        userId: auth.user!.anonymousId,
+      );
+    }
 
     if (!mounted) return;
 
@@ -291,6 +312,13 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
 
           // ── Error banner ───────────────────────────────────────────────
+          if (msgs.hasConnectionIssue)
+            _ConnectionBanner(
+              queuedCount: msgs.queuedMessageCount,
+              onRetry: msgs.retryQueuedMessages,
+            ),
+
+          // ── Error banner ───────────────────────────────────────────────
           if (msgs.error != null)
             _ErrorBanner(
               message: msgs.error!,
@@ -304,6 +332,7 @@ class _ChatScreenState extends State<ChatScreen> {
               onPhotoTap: _showPhotoOptions,
               hasPhoto: _attachedPhotoUrl != null,
               photoUploading: _photoUploading,
+              isBusy: msgs.isTyping || msgs.isLoading,
             ),
         ],
       ),
@@ -462,12 +491,14 @@ class _ChatInput extends StatefulWidget {
   final VoidCallback onPhotoTap;
   final bool hasPhoto;
   final bool photoUploading;
+  final bool isBusy;
 
   const _ChatInput({
     required this.onSend,
     required this.onPhotoTap,
     required this.hasPhoto,
     required this.photoUploading,
+    required this.isBusy,
   });
 
   @override
@@ -493,6 +524,7 @@ class _ChatInputState extends State<_ChatInput> {
   }
 
   void _send() {
+    if (widget.isBusy) return;
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     widget.onSend(text);
@@ -602,11 +634,13 @@ class _ChatInputState extends State<_ChatInput> {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: _hasText ? _send : null,
+                onTap: (_hasText && !widget.isBusy) ? _send : null,
                 borderRadius: BorderRadius.circular(AppRadius.md),
                 child: Icon(
                   Icons.send_rounded,
-                  color: _hasText ? Colors.white : AppColors.textMuted,
+                  color: (_hasText && !widget.isBusy)
+                      ? Colors.white
+                      : AppColors.textMuted,
                   size: 18,
                 ),
               ),
@@ -927,6 +961,63 @@ class _BottomSheetOption extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ConnectionBanner extends StatelessWidget {
+  final int queuedCount;
+  final Future<void> Function() onRetry;
+
+  const _ConnectionBanner({
+    required this.queuedCount,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final queuedText = queuedCount > 0
+        ? ' ($queuedCount naka-queue)'
+        : '';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.medium.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.medium.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.wifi_off_rounded,
+            color: AppColors.medium,
+            size: 15,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Connection lost$queuedText. Magre-retry kapag stable na.',
+              style: const TextStyle(
+                fontFamily: 'Nunito',
+                fontSize: 12,
+                color: AppColors.medium,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.medium,
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+            ),
+            child: const Text('Retry'),
+          ),
+        ],
       ),
     );
   }

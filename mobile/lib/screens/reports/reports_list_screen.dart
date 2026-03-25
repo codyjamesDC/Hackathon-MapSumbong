@@ -37,11 +37,15 @@ class _ReportsListScreenState extends State<ReportsListScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadReports());
   }
 
-  void _loadReports() {
+  Future<void> _loadReports() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final reports = Provider.of<ReportsProvider>(context, listen: false);
     final id = auth.user?.anonymousId;
-    if (id != null) reports.loadReports(userId: id);
+    if (id == null) {
+      reports.clearError();
+      return;
+    }
+    await reports.loadReports(userId: id);
   }
 
   @override
@@ -51,6 +55,8 @@ class _ReportsListScreenState extends State<ReportsListScreen>
   }
 
   Future<void> _startNewReport() async {
+    Provider.of<MessagesProvider>(context, listen: false).clearGpsCoordinates();
+
     final LatLng? picked = await Navigator.of(context).push<LatLng>(
       MaterialPageRoute(
         builder: (_) => const LocationPickerScreen(),
@@ -60,10 +66,17 @@ class _ReportsListScreenState extends State<ReportsListScreen>
 
     if (!mounted) return;
 
-    if (picked != null) {
-      Provider.of<MessagesProvider>(context, listen: false)
-          .setGpsCoordinates(picked.latitude, picked.longitude);
+    if (picked == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pumili muna ng lokasyon bago magsimula ng report.'),
+        ),
+      );
+      return;
     }
+
+    Provider.of<MessagesProvider>(context, listen: false)
+        .setGpsCoordinates(picked.latitude, picked.longitude);
 
     context.go('/chat/new');
   }
@@ -81,7 +94,7 @@ class _ReportsListScreenState extends State<ReportsListScreen>
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
-            onPressed: _loadReports,
+            onPressed: () => _loadReports(),
           ),
           IconButton(
             icon: const Icon(Icons.map_outlined, color: AppColors.textSecondary),
@@ -126,14 +139,47 @@ class _ReportsListScreenState extends State<ReportsListScreen>
           ),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: _tabs.map((t) => _ReportTabView(
-          statusFilter: t.status,
-          reportsProvider: reportsProvider,
-          onRefresh: _loadReports,
-          onTap: (id) => context.go('/reports/$id'),
-        )).toList(),
+      body: Column(
+        children: [
+          if (reportsProvider.error != null)
+            MaterialBanner(
+              backgroundColor: AppColors.criticalLight,
+              content: Text(
+                reportsProvider.error!,
+                style: const TextStyle(
+                  fontFamily: 'Nunito',
+                  fontSize: 13,
+                  color: AppColors.critical,
+                ),
+              ),
+              leading: const Icon(Icons.error_outline_rounded,
+                  color: AppColors.critical, size: 22),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    reportsProvider.clearError();
+                    _loadReports();
+                  },
+                  child: const Text('Retry'),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  onPressed: () => reportsProvider.clearError(),
+                ),
+              ],
+            ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: _tabs.map((t) => _ReportTabView(
+                statusFilter: t.status,
+                reportsProvider: reportsProvider,
+                onRefresh: _loadReports,
+                onTap: (id) => context.go('/reports/$id'),
+              )).toList(),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _startNewReport,
@@ -164,7 +210,7 @@ class _ReportsListScreenState extends State<ReportsListScreen>
 class _ReportTabView extends StatelessWidget {
   final String statusFilter;
   final ReportsProvider reportsProvider;
-  final VoidCallback onRefresh;
+  final Future<void> Function() onRefresh;
   final void Function(String) onTap;
 
   const _ReportTabView({
@@ -181,7 +227,18 @@ class _ReportTabView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (reportsProvider.isLoading) {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (auth.user?.anonymousId == null) {
+      return EmptyStateView(
+        icon: Icons.login_rounded,
+        title: 'Mag-sign in muna',
+        subtitle: 'Kailangan ang iyong account para makita ang mga report.',
+        buttonLabel: 'Bumalik',
+        onButton: () => context.go('/auth'),
+      );
+    }
+
+    if (reportsProvider.isLoading && reportsProvider.reports.isEmpty) {
       return const AppLoader(message: 'Nilo-load...');
     }
 
@@ -202,7 +259,7 @@ class _ReportTabView extends StatelessWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: () async => onRefresh(),
+      onRefresh: onRefresh,
       color: AppColors.primary,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),

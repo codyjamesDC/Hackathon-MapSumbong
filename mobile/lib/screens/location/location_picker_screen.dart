@@ -36,9 +36,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       // Always request permission — never skip
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        if (mounted) {
-          _showSnack('Please enable location services on your device.');
-        }
+        if (mounted) _showServiceDialog();
         setState(() => _locationLoading = false);
         return;
       }
@@ -58,9 +56,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       }
 
       if (permission == LocationPermission.denied) {
-        if (mounted) {
-          _showSnack('Location permission denied. Please pick manually.');
-        }
+        if (mounted) _showSnack('Location denied. You can still pin manually on the map.');
         setState(() => _locationLoading = false);
         return;
       }
@@ -93,10 +89,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Location Permission Required'),
+        title: const Text('Permission Needed'),
         content: const Text(
-          'MapSumbong needs your location to accurately log the incident. '
-          'Please enable it in your device settings.',
+          'MapSumbong can use your GPS for faster pinning. '
+          'If you keep this denied, you can still place the pin manually.',
         ),
         actions: [
           TextButton(
@@ -109,6 +105,31 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               Geolocator.openAppSettings();
             },
             child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showServiceDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Turn On Location Services'),
+        content: const Text(
+          'GPS is off. You may turn it on for accurate auto-location, or continue by pinning manually.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Pick manually'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Geolocator.openLocationSettings();
+            },
+            child: const Text('Open Location Settings'),
           ),
         ],
       ),

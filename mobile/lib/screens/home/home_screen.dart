@@ -84,12 +84,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: Colors.white.withOpacity(0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.logout_rounded, color: Colors.white, size: 18),
+                    child: const Icon(Icons.person_outline_rounded, color: Colors.white, size: 18),
                   ),
-                  onPressed: () async {
-                    await authProvider.signOut();
-                    if (context.mounted) context.go('/auth');
-                  },
+                  onPressed: () => context.go('/profile'),
                 ),
                 const SizedBox(width: 8),
               ],

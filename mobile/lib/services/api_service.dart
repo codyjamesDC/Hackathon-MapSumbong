@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/report.dart';
 import '../models/message.dart';
 
@@ -11,6 +12,37 @@ class ApiService {
 
   // Gemini 2.5 Flash can take 30-60s on free tier — use 90s to be safe
   static const Duration _timeout = Duration(seconds: 90);
+
+  /// Bearer token for FastAPI routes. Uses Supabase session JWT when signed in;
+  /// optional `BACKEND_JWT` in `.env` for local dev / guest flows without Supabase session.
+  /// Backend `JWT_SECRET` must match Supabase **JWT Secret** (Project Settings → API).
+  static String? get _accessToken {
+    final session = Supabase.instance.client.auth.currentSession;
+    final fromSession = session?.accessToken;
+    if (fromSession != null && fromSession.isNotEmpty) {
+      return fromSession;
+    }
+    final dev = dotenv.env['BACKEND_JWT'];
+    if (dev != null && dev.trim().isNotEmpty) {
+      return dev.trim();
+    }
+    return null;
+  }
+
+  static Map<String, String> _headersJson() {
+    final h = <String, String>{'Content-Type': 'application/json'};
+    final t = _accessToken;
+    if (t != null) {
+      h['Authorization'] = 'Bearer $t';
+    }
+    return h;
+  }
+
+  static Map<String, String> _headersForGet() {
+    final t = _accessToken;
+    if (t == null) return {};
+    return {'Authorization': 'Bearer $t'};
+  }
 
   // ── Process message with Gemini AI ────────────────────────────────────────
   static Future<Map<String, dynamic>> processMessage({
@@ -28,7 +60,7 @@ class ApiService {
       final response = await http
           .post(
             Uri.parse(url),
-            headers: {'Content-Type': 'application/json'},
+            headers: _headersJson(),
             body: jsonEncode({
               'message': message,
               'reporter_id': reporterId,
@@ -70,7 +102,7 @@ class ApiService {
     final response = await http
         .post(
           Uri.parse(url),
-          headers: {'Content-Type': 'application/json'},
+          headers: _headersJson(),
           body: jsonEncode({
             ...reportData,
             'reporter_anonymous_id': reporterAnonymousId,
@@ -105,7 +137,8 @@ class ApiService {
 
     final uri = Uri.parse('$baseUrl/reports')
         .replace(queryParameters: queryParams);
-    final response = await http.get(uri).timeout(_timeout);
+    final response =
+        await http.get(uri, headers: _headersForGet()).timeout(_timeout);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -120,7 +153,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getReport(String reportId) async {
     final url = '$baseUrl/reports/$reportId';
     final response = await http
-        .get(Uri.parse(url))
+        .get(Uri.parse(url), headers: _headersForGet())
         .timeout(_timeout);
 
     if (response.statusCode == 200) {
@@ -142,7 +175,7 @@ class ApiService {
     final response = await http
         .patch(
           Uri.parse(url),
-          headers: {'Content-Type': 'application/json'},
+          headers: _headersJson(),
           body: jsonEncode({
             'status': status,
             if (resolutionNote != null) 'resolution_note': resolutionNote,
@@ -176,7 +209,7 @@ class ApiService {
     final response = await http
         .post(
           Uri.parse(url),
-          headers: {'Content-Type': 'application/json'},
+          headers: _headersJson(),
           body: jsonEncode(message.toJson()),
         )
         .timeout(_timeout);

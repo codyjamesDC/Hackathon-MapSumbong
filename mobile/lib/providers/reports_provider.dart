@@ -9,11 +9,13 @@ class ReportsProvider with ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   Report? _selectedReport;
+  String? _selectError;
 
   List<Report> get reports => _reports;
   bool get isLoading => _isLoading;
   String? get error => _error;
   Report? get selectedReport => _selectedReport;
+  String? get selectError => _selectError;
 
   // ── Filtered views ────────────────────────────────────────────────────────
   List<Report> getReportsByStatus(String status) =>
@@ -75,18 +77,28 @@ class ReportsProvider with ChangeNotifier {
   }
 
   // ── Status update ─────────────────────────────────────────────────────────
-  Future<void> updateReportStatus(String reportId, String newStatus) async {
+  Future<void> updateReportStatus(
+    String reportId,
+    String newStatus, {
+    String? resolutionNote,
+    String? updatedBy,
+  }) async {
     try {
       await ApiService.updateReportStatus(
         reportId: reportId,
         status: newStatus,
+        resolutionNote: resolutionNote,
+        updatedBy: updatedBy,
       );
 
       final index = _reports.indexWhere((r) => r.id == reportId);
       if (index != -1) {
         _reports[index] = _reports[index].copyWith(status: newStatus);
-        notifyListeners();
       }
+      if (_selectedReport?.id == reportId) {
+        _selectedReport = _selectedReport!.copyWith(status: newStatus);
+      }
+      notifyListeners();
     } catch (e) {
       _error = e.toString();
       rethrow;
@@ -96,12 +108,15 @@ class ReportsProvider with ChangeNotifier {
   // ── Select a single report ────────────────────────────────────────────────
   Future<void> selectReport(String reportId) async {
     _isLoading = true;
+    _selectError = null;
     notifyListeners();
 
     try {
       _selectedReport = await SupabaseService.getReportById(reportId);
+      _selectError = null;
     } catch (e) {
-      _error = e.toString();
+      _selectError = e.toString();
+      _selectedReport = null;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -110,6 +125,7 @@ class ReportsProvider with ChangeNotifier {
 
   void clearSelectedReport() {
     _selectedReport = null;
+    _selectError = null;
     notifyListeners();
   }
 
