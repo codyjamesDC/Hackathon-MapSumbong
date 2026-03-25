@@ -1,22 +1,22 @@
 """
-MapSumbong Day 3-4 Test Script
-Run: python test_pipeline.py
+MapSumbong Day 3-4 Integration Script
+Run: python scripts/pipeline_integration.py
 
-Tests:
+Checks:
 - 10 sample messages across Tagalog, Bisaya, Taglish, English
 - Spam filter validation
 - Multi-turn conversation with structured extraction
 """
 
-import httpx
-import json
 import asyncio
+import json
+
+import httpx
 
 DELAY = 13  # seconds between requests (free tier = 5 req/min = 12s apart)
-
 BASE_URL = "http://localhost:8000"
 
-# ── Color helpers ─────────────────────────────────────────────────────────────
+# Color helpers
 GREEN = "\033[92m"
 RED = "\033[91m"
 YELLOW = "\033[93m"
@@ -29,7 +29,6 @@ def p(color, label, text):
     print(f"{color}{BOLD}[{label}]{RESET} {text}")
 
 
-# ── Single message test ───────────────────────────────────────────────────────
 async def send_message(client, message, session_id=None):
     payload = {"message": message}
     if session_id:
@@ -39,11 +38,10 @@ async def send_message(client, message, session_id=None):
     return resp.json()
 
 
-# ── Full multi-turn conversation test ────────────────────────────────────────
-async def test_full_conversation(client):
-    print(f"\n{BOLD}{'='*60}{RESET}")
+async def run_full_conversation(client):
+    print(f"\n{BOLD}{'=' * 60}{RESET}")
     print(f"{BOLD}TEST: Full multi-turn conversation (Tagalog){RESET}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     session_id = None
     turns = [
@@ -53,14 +51,18 @@ async def test_full_conversation(client):
     ]
 
     for i, msg in enumerate(turns):
-        p(BLUE, f"Turn {i+1}", f"User: {msg}")
+        p(BLUE, f"Turn {i + 1}", f"User: {msg}")
         result = await send_message(client, msg, session_id)
         session_id = result.get("session_id")
 
         if result.get("success"):
             p(GREEN, "AI", result["response"][:120] + "...")
             if result.get("is_complete"):
-                p(GREEN, "EXTRACTED", json.dumps(result["report_data"], indent=2, ensure_ascii=False))
+                p(
+                    GREEN,
+                    "EXTRACTED",
+                    json.dumps(result["report_data"], indent=2, ensure_ascii=False),
+                )
                 p(GREEN, "PASS", "Report successfully extracted!")
             else:
                 p(YELLOW, "STATUS", f"Gathering info... (session: {session_id})")
@@ -68,11 +70,10 @@ async def test_full_conversation(client):
             p(RED, "FAIL", result.get("error"))
 
 
-# ── Spam filter tests ─────────────────────────────────────────────────────────
-async def test_spam_filter(client):
-    print(f"\n{BOLD}{'='*60}{RESET}")
+async def run_spam_filter(client):
+    print(f"\n{BOLD}{'=' * 60}{RESET}")
     print(f"{BOLD}TEST: Spam filter (should NOT create reports){RESET}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     spam_messages = [
         "lol wala lang",
@@ -86,11 +87,10 @@ async def test_spam_filter(client):
         p(BLUE, "INPUT", msg)
         if result.get("success"):
             ai_reply = result["response"]
-            # Should NOT have is_complete=True for spam
             if not result.get("is_complete"):
                 p(GREEN, "PASS", f"Spam rejected correctly. AI: {ai_reply[:80]}...")
             else:
-                p(RED, "FAIL", f"Spam got through as complete report!")
+                p(RED, "FAIL", "Spam got through as complete report!")
         else:
             err = str(result.get("error", ""))[:80]
             p(RED, "ERROR", err + "...")
@@ -98,27 +98,28 @@ async def test_spam_filter(client):
         await asyncio.sleep(DELAY)
 
 
-# ── 10 language test messages ─────────────────────────────────────────────────
-async def test_10_messages(client):
-    print(f"\n{BOLD}{'='*60}{RESET}")
+async def run_10_messages(client):
+    print(f"\n{BOLD}{'=' * 60}{RESET}")
     print(f"{BOLD}TEST: 10 sample messages (3 languages){RESET}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     test_cases = [
-        # Tagalog
         ("Tagalog", "May nasirang ilaw sa daan sa Brgy. Poblacion, hindi nag-iilaw gabi"),
-        ("Tagalog", "Maraming basura sa tabi ng creek sa Barangay Sta. Cruz, matagal na hindi nako-kolekta"),
+        (
+            "Tagalog",
+            "Maraming basura sa tabi ng creek sa Barangay Sta. Cruz, matagal na hindi nako-kolekta",
+        ),
         ("Tagalog", "Butas ang kalsada sa may entrance ng subdivision namin sa Brgy. Bagong Silang"),
-        # Bisaya
         ("Bisaya", "Nag-baha ang among kanto sa Sitio Mahayag, Brgy. Poblacion"),
         ("Bisaya", "Naay nabugto nga wire sa kuryente sa Brgy. San Roque, delikado kaayo"),
         ("Bisaya", "Dili mo mahimong makaagi ang mga sakyanan sa dalan sa Brgy. Lawis tungod sa basura"),
-        # Taglish
         ("Taglish", "May water interruption sa aming area sa Brgy. San Jose, 2 days na walang tubig"),
         ("Taglish", "Yung streetlight sa Rizal Ave corner Quezon St. hindi na nag-ilaw, dark na kapag gabi"),
-        # English
         ("English", "There's a large pothole on the main road near the elementary school in Brgy. Mabini"),
-        ("English", "Flooding emergency at the low-lying area near the river in Barangay San Antonio, water rising fast"),
+        (
+            "English",
+            "Flooding emergency at the low-lying area near the river in Barangay San Antonio, water rising fast",
+        ),
     ]
 
     passed = 0
@@ -130,7 +131,11 @@ async def test_10_messages(client):
             p(GREEN, "AI", result["response"][:100] + "...")
             if result.get("report_data"):
                 data = result["report_data"]
-                p(YELLOW, "DATA", f"type={data.get('issue_type')} urgency={data.get('urgency')} barangay={data.get('barangay')}")
+                p(
+                    YELLOW,
+                    "DATA",
+                    f"type={data.get('issue_type')} urgency={data.get('urgency')} barangay={data.get('barangay')}",
+                )
             passed += 1
         else:
             p(RED, "FAIL", result.get("error")[:80] + "...")
@@ -140,24 +145,22 @@ async def test_10_messages(client):
     p(GREEN if passed == 10 else YELLOW, "RESULT", f"{passed}/10 messages processed successfully")
 
 
-# ── Geocoding test ─────────────────────────────────────────────────────────────
-async def test_geocoding(client):
-    print(f"\n{BOLD}{'='*60}{RESET}")
+async def run_geocoding(client):
+    print(f"\n{BOLD}{'=' * 60}{RESET}")
     print(f"{BOLD}TEST: Multi-turn with geocoding{RESET}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
-    # This conversation should trigger geocoding when location is specific enough
     session_id = None
     turns = [
         "May sunog sa aming kapitbahayan",
-        "Sa Rizal Street, Los Baños, Laguna",
+        "Sa Rizal Street, Los Banos, Laguna",
         "Malaki ang apoy, kailangan ng tulong ng BFP agad",
     ]
 
     for i, msg in enumerate(turns):
         result = await send_message(client, msg, session_id)
         session_id = result.get("session_id")
-        p(BLUE, f"Turn {i+1}", msg)
+        p(BLUE, f"Turn {i + 1}", msg)
 
         if result.get("success"):
             p(GREEN, "AI", result["response"][:100] + "...")
@@ -172,12 +175,10 @@ async def test_geocoding(client):
         print()
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
 async def main():
-    print(f"\n{BOLD}MapSumbong Day 3-4 Pipeline Tests{RESET}")
+    print(f"\n{BOLD}MapSumbong Day 3-4 Integration Checks{RESET}")
     print(f"Testing against: {BASE_URL}\n")
 
-    # Check server is running
     try:
         async with httpx.AsyncClient() as client:
             health = await client.get(f"{BASE_URL}/", timeout=5)
@@ -187,14 +188,14 @@ async def main():
         return
 
     async with httpx.AsyncClient() as client:
-        await test_10_messages(client)
-        await test_spam_filter(client)
-        await test_full_conversation(client)
-        await test_geocoding(client)
+        await run_10_messages(client)
+        await run_spam_filter(client)
+        await run_full_conversation(client)
+        await run_geocoding(client)
 
-    print(f"\n{BOLD}{'='*60}{RESET}")
-    print(f"{BOLD}All tests complete.{RESET}")
-    print(f"{'='*60}\n")
+    print(f"\n{BOLD}{'=' * 60}{RESET}")
+    print(f"{BOLD}All checks complete.{RESET}")
+    print(f"{'=' * 60}\n")
 
 
 if __name__ == "__main__":
