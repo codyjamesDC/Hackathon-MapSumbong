@@ -73,7 +73,7 @@ GEMINI_API_KEY=AIzaSy...
 
 # TELEGRAM - MVP Feature
 TELEGRAM_BOT_TOKEN=789456123:ABCDefGhIjKlMnOpQ...
-TELEGRAM_WEBHOOK_URL=https://your-domain.com/api/telegram/webhook
+TELEGRAM_WEBHOOK_URL=https://your-domain.com/telegram/webhook
 TELEGRAM_BOT_SECRET=your-secret-key-for-signature-verification
 
 # SMS - Optional (remove if not needed)
@@ -205,19 +205,19 @@ ngrok http 8000
 # Copy your ngrok URL (https://xxxx-x.ngrok.io)
 
 # Then set in .env:
-# TELEGRAM_WEBHOOK_URL=https://xxxx-x.ngrok.io/api/telegram/webhook
+# TELEGRAM_WEBHOOK_URL=https://xxxx-x.ngrok.io/telegram/webhook
 ```
 
 Or for production deployment:
 ```
-TELEGRAM_WEBHOOK_URL=https://your-domain.com/api/telegram/webhook
+TELEGRAM_WEBHOOK_URL=https://your-domain.com/telegram/webhook
 ```
 
 ### 3.3 Test Telegram Integration
 
 **Direct test via cURL:**
 ```bash
-curl -X POST http://localhost:8000/api/telegram/webhook \
+curl -X POST http://localhost:8000/telegram/webhook \
   -H "Content-Type: application/json" \
   -d '{
     "update_id": 123456789,

@@ -45,7 +45,7 @@
    - Added imports: `hmac`, `hashlib`, structured logging
    - Replaced all `print()` statements with logger calls (DEBUG, INFO, WARNING, ERROR levels)
    - **Security**: Added `_validate_telegram_signature()` function
-     - Validates X-Telegram-Bot-Api-Secret-Sha256 header
+    - Validates X-Telegram-Bot-Api-Secret-Token header
      - Uses constant-time comparison to prevent timing attacks
      - Logs signature verification results
    - **Auditing**: Webhook logging now includes:
@@ -115,7 +115,7 @@ Structured Logging Flow:
 ### Security Enhancements
 
 1. **Telegram Webhook Signature Verification**
-   - Validates `X-Telegram-Bot-Api-Secret-Sha256` header
+  - Validates `X-Telegram-Bot-Api-Secret-Token` header
    - Prevents spoofed messages from unauthorized sources
    - Uses constant-time comparison (prevents timing attacks)
    - Graceful fallback if secret not configured (logs warning)
@@ -281,7 +281,7 @@ python main.py
 # Option A: Use cURL
 curl -X POST http://localhost:8000/telegram/webhook \
   -H "Content-Type: application/json" \
-  -H "X-Telegram-Bot-Api-Secret-Sha256: <YOUR_SECRET_SHA256_HERE>" \
+  -H "X-Telegram-Bot-Api-Secret-Token: <YOUR_WEBHOOK_SECRET_TOKEN>" \
   -d '{
     "update_id": 123456789,
     "message": {

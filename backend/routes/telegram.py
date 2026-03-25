@@ -3,7 +3,6 @@ import httpx
 import os
 import tempfile
 import hmac
-import hashlib
 
 from services.whisper_service import transcribe_audio
 from services.gemini_service import process_message as process_with_gemini
@@ -14,7 +13,6 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-TELEGRAM_BOT_SECRET = os.getenv('TELEGRAM_BOT_SECRET', '')
 TELEGRAM_API_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 
@@ -75,37 +73,37 @@ def _looks_like_report_intent(user_message: str, extracted_data: dict) -> bool:
     return False
 
 
-def _validate_telegram_signature(request_headers: dict, body: bytes) -> bool:
+def _validate_telegram_secret(request_headers: dict) -> bool:
     """
-    Validate Telegram webhook signature.
-    
-    Telegram sends X-Telegram-Bot-Api-Secret-Sha256 header with SHA256 hash
-    of the bot secret and request body.
+    Validate Telegram webhook secret token.
+
+    Telegram includes the configured secret token in
+    X-Telegram-Bot-Api-Secret-Token for webhook requests.
     """
-    if not TELEGRAM_BOT_SECRET:
+    expected_secret = os.getenv('TELEGRAM_BOT_SECRET', '')
+    if not expected_secret:
         logger.warning('Telegram webhook secret not configured; skipping signature verification')
         return True
-    
+
     try:
-        signature = request_headers.get('X-Telegram-Bot-Api-Secret-Sha256', '')
-        if not signature:
-            logger.warning('Missing X-Telegram-Bot-Api-Secret-Sha256 header')
+        provided_secret = (
+            request_headers.get('X-Telegram-Bot-Api-Secret-Token')
+            or request_headers.get('x-telegram-bot-api-secret-token')
+            or ''
+        )
+        if not provided_secret:
+            logger.warning('Missing X-Telegram-Bot-Api-Secret-Token header')
             return False
-        
-        # Calculate expected signature: SHA256(secret + body)
-        expected = hashlib.sha256(
-            TELEGRAM_BOT_SECRET.encode() + body
-        ).hexdigest()
-        
-        # Compare with constant time to prevent timing attacks
-        if not hmac.compare_digest(signature, expected):
-            logger.error(f'Telegram signature mismatch. Expected: {expected[:8]}..., Got: {signature[:8]}...')
+
+        # Constant-time compare to reduce token oracle risk.
+        if not hmac.compare_digest(provided_secret, expected_secret):
+            logger.error('Telegram secret token mismatch')
             return False
-        
-        logger.debug('Telegram webhook signature valid')
+
+        logger.debug('Telegram webhook secret token valid')
         return True
     except Exception as e:
-        logger.error(f'Telegram signature validation error: {e}')
+        logger.error(f'Telegram secret token validation error: {e}')
         return False
 
 
@@ -126,14 +124,14 @@ async def send_telegram_message(chat_id: int, text: str):
 @router.post('/webhook')
 async def telegram_webhook(request: Request):
     """Handle incoming Telegram messages"""
-    
-    request_body = await request.body()
+
+    await request.body()
 
     try:
-        # Validate webhook signature (security)
-        if not _validate_telegram_signature(dict(request.headers), request_body):
-            logger.warning('Telegram webhook signature validation failed')
-            return {'ok': False, 'error': 'Invalid signature'}
+        # Validate webhook secret token (security)
+        if not _validate_telegram_secret(dict(request.headers)):
+            logger.warning('Telegram webhook secret token validation failed')
+            return {'ok': False, 'error': 'Invalid webhook secret'}
         
         update = await request.json()
         

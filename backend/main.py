@@ -507,35 +507,3 @@ def clear_session(
 ):
     sessions.pop(session_id, None)
     return {'success': True}
-
-
-# ── Telegram webhook (simple passthrough) ─────────────────────────────────────
-
-@app.post('/telegram-webhook')
-async def telegram_webhook(payload: dict):
-    try:
-        message = payload.get('message', {})
-        chat_id = message.get('chat', {}).get('id')
-        text = message.get('text', '')
-
-        if not chat_id or not text:
-            return {'ok': True}
-
-        result = await process_message(
-            {'message': text, 'session_id': f'telegram_{chat_id}'}
-        )
-
-        bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
-        if bot_token and result.get('success'):
-            async with httpx.AsyncClient() as client:
-                await client.post(
-                    f'https://api.telegram.org/bot{bot_token}/sendMessage',
-                    json={
-                        'chat_id': chat_id,
-                        'text': result['response'],
-                    },
-                )
-        return {'ok': True}
-
-    except Exception as e:
-        return {'ok': False, 'error': str(e)}
