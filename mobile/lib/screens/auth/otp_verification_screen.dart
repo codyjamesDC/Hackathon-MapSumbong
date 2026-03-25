@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pinput/pinput.dart';
 import '../../providers/auth_provider.dart';
+import '../../theme/app_theme.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -18,61 +21,90 @@ class OtpVerificationScreen extends StatefulWidget {
 
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   final _pinController = TextEditingController();
+  Timer? _resendTicker;
   bool _canResend = false;
-  int _resendTimer = 30;
+  int _resendTimer = 60;
+  bool _isCodeComplete = false;
 
   @override
   void initState() {
     super.initState();
+    _pinController.addListener(() {
+      final isComplete = _pinController.text.trim().length == 6;
+      if (isComplete != _isCodeComplete) {
+        setState(() {
+          _isCodeComplete = isComplete;
+        });
+      }
+    });
     _startResendTimer();
   }
 
   @override
   void dispose() {
+    _resendTicker?.cancel();
     _pinController.dispose();
     super.dispose();
   }
 
   void _startResendTimer() {
+    _resendTicker?.cancel();
     setState(() {
       _canResend = false;
-      _resendTimer = 30;
+      _resendTimer = 60;
     });
 
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) {
-        setState(() {
-          _resendTimer--;
-          if (_resendTimer > 0) {
-            _startResendTimer();
-          } else {
-            _canResend = true;
-          }
-        });
+    _resendTicker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
       }
+      if (_resendTimer <= 1) {
+        timer.cancel();
+        setState(() {
+          _resendTimer = 0;
+          _canResend = true;
+        });
+        return;
+      }
+
+      setState(() {
+        _resendTimer -= 1;
+      });
     });
   }
 
-  void _verifyOTP() async {
-    if (_pinController.text.length != 6) return;
+  String get _maskedPhone {
+    if (widget.phoneNumber.length <= 4) return widget.phoneNumber;
+    final head = widget.phoneNumber.substring(0, widget.phoneNumber.length - 4);
+    final tail = widget.phoneNumber.substring(widget.phoneNumber.length - 4);
+    return '$head••••$tail';
+  }
+
+  Future<void> _verifyOTP() async {
+    final code = _pinController.text.trim();
+    if (code.length != 6) return;
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     try {
-      await authProvider.verifyOTP(widget.phoneNumber, _pinController.text);
+      await authProvider.verifyOTP(widget.phoneNumber, code);
       if (mounted && authProvider.isAuthenticated) {
         context.go('/home');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+          SnackBar(
+            content: Text('Hindi ma-verify ang code: ${e.toString()}'),
+            backgroundColor: AppColors.critical,
+          ),
         );
       }
     }
   }
 
-  void _resendOTP() async {
+  Future<void> _resendOTP() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     try {
@@ -80,13 +112,18 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       _startResendTimer();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('OTP sent successfully')),
+          const SnackBar(
+            content: Text('Bagong OTP naipadala na.'),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+          SnackBar(
+            content: Text('Hindi naipadala ang OTP: ${e.toString()}'),
+            backgroundColor: AppColors.critical,
+          ),
         );
       }
     }
@@ -95,82 +132,98 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
+    final titleStyle = const TextStyle(
+      fontSize: 24,
+      fontWeight: FontWeight.w800,
+      color: AppColors.textPrimary,
+    );
+    final subtitleStyle = const TextStyle(
+      fontSize: 15,
+      color: AppColors.textSecondary,
+      height: 1.45,
+    );
+
+    final defaultPinTheme = PinTheme(
+      width: 48,
+      height: 56,
+      textStyle: const TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textPrimary,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+    );
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/auth'),
         ),
-        title: const Text('Verify Phone Number'),
+        title: const Text('I-verify ang Numero'),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: 48),
+              const SizedBox(height: 24),
 
               // Icon
-              Icon(
-                Icons.sms,
-                size: 64,
-                color: Theme.of(context).primaryColor,
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySurface,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                ),
+                child: const Icon(
+                  Icons.sms_rounded,
+                  size: 34,
+                  color: AppColors.primary,
+                ),
               ),
 
               const SizedBox(height: 24),
 
               // Title
               const Text(
-                'Enter verification code',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+                'Ilagay ang 6-digit code',
+                style: titleStyle,
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
 
               // Subtitle
               Text(
-                'We sent a 6-digit code to ${widget.phoneNumber}',
+                'May ipinadala kaming OTP sa\n$_maskedPhone',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
+                style: subtitleStyle,
               ),
 
-              const SizedBox(height: 48),
+              const SizedBox(height: 32),
 
               // PIN input
               Pinput(
                 controller: _pinController,
                 length: 6,
+                keyboardType: TextInputType.number,
                 onCompleted: (_) => _verifyOTP(),
-                defaultPinTheme: PinTheme(
-                  width: 56,
-                  height: 56,
-                  textStyle: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(8),
+                defaultPinTheme: defaultPinTheme,
+                focusedPinTheme: defaultPinTheme.copyWith(
+                  decoration: defaultPinTheme.decoration!.copyWith(
+                    border: Border.all(color: AppColors.primary, width: 2),
                   ),
                 ),
-                focusedPinTheme: PinTheme(
-                  width: 56,
-                  height: 56,
-                  textStyle: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Theme.of(context).primaryColor),
-                    borderRadius: BorderRadius.circular(8),
+                submittedPinTheme: defaultPinTheme.copyWith(
+                  decoration: defaultPinTheme.decoration!.copyWith(
+                    border: Border.all(color: AppColors.primaryLight),
                   ),
                 ),
               ),
@@ -181,20 +234,27 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: (authProvider.isLoading || _pinController.text.length != 6)
+                  onPressed: (authProvider.isLoading || !_isCodeComplete)
                       ? null
                       : _verifyOTP,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                   ),
                   child: authProvider.isLoading
-                      ? const CircularProgressIndicator()
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
                       : const Text(
-                          'Verify',
-                          style: TextStyle(fontSize: 16),
+                          'I-verify ang Code',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                         ),
                 ),
               ),
@@ -205,13 +265,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text("Didn't receive code? "),
+                  const Text('Walang natanggap na code? '),
                   TextButton(
                     onPressed: (_canResend && !authProvider.isLoading) ? _resendOTP : null,
                     child: Text(
-                      _canResend ? 'Resend' : 'Resend in ${_resendTimer}s',
+                      _canResend ? 'Magpadala muli' : 'Magpadala muli sa ${_resendTimer}s',
                       style: TextStyle(
-                        color: _canResend ? Theme.of(context).primaryColor : Colors.grey,
+                        color: _canResend ? AppColors.primary : AppColors.textMuted,
                       ),
                     ),
                   ),

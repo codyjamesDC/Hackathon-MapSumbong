@@ -178,6 +178,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen>
                     _PhoneField(
                       controller: _phoneController,
                       selectedCode: _selectedCountryCode,
+                      maxDigits: _selectedCountryCode == '+63' ? 10 : 15,
                       onCodeChanged: (v) =>
                           setState(() => _selectedCountryCode = v),
                     ),
@@ -240,11 +241,13 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen>
 class _PhoneField extends StatelessWidget {
   final TextEditingController controller;
   final String selectedCode;
+  final int maxDigits;
   final void Function(String) onCodeChanged;
 
   const _PhoneField({
     required this.controller,
     required this.selectedCode,
+    required this.maxDigits,
     required this.onCodeChanged,
   });
 
@@ -297,13 +300,20 @@ class _PhoneField extends StatelessWidget {
             child: TextFormField(
               controller: controller,
               keyboardType: TextInputType.phone,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              textInputAction: TextInputAction.done,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(maxDigits),
+              ],
               style: const TextStyle(
                 fontFamily: 'Nunito',
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
               ),
+              onFieldSubmitted: (_) {
+                FocusScope.of(context).unfocus();
+              },
               decoration: const InputDecoration(
                 hintText: '9XX XXX XXXX',
                 hintStyle: TextStyle(
@@ -321,7 +331,11 @@ class _PhoneField extends StatelessWidget {
                 if (v == null || v.trim().isEmpty) {
                   return 'Kinakailangan ang numero ng telepono';
                 }
-                if (v.trim().length < 9) {
+                final digits = v.trim();
+                if (selectedCode == '+63' && digits.length != 10) {
+                  return 'Maglagay ng 10-digit na mobile number';
+                }
+                if (selectedCode != '+63' && digits.length < 8) {
                   return 'Maglagay ng tamang numero';
                 }
                 return null;
