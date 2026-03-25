@@ -84,9 +84,10 @@ class AuthProvider with ChangeNotifier {
       if (_isStaleOp(opId)) return;
       _error = _friendlyError(e.toString());
     } finally {
-      if (_isStaleOp(opId)) return;
-      _isLoading = false;
-      notifyListeners();
+      if (!_isStaleOp(opId)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -106,9 +107,10 @@ class AuthProvider with ChangeNotifier {
       if (_isStaleOp(opId)) return;
       _error = _friendlyError(e.toString());
     } finally {
-      if (_isStaleOp(opId)) return;
-      _isLoading = false;
-      notifyListeners();
+      if (!_isStaleOp(opId)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -157,9 +159,10 @@ class AuthProvider with ChangeNotifier {
       if (_isStaleOp(opId)) return;
       _error = e.toString();
     } finally {
-      if (_isStaleOp(opId)) return;
-      _isLoading = false;
-      notifyListeners();
+      if (!_isStaleOp(opId)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -201,9 +204,10 @@ class AuthProvider with ChangeNotifier {
       if (_isStaleOp(opId)) return;
       _error = e.toString();
     } finally {
-      if (_isStaleOp(opId)) return;
-      _isLoading = false;
-      notifyListeners();
+      if (!_isStaleOp(opId)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
