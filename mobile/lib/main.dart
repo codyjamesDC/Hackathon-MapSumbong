@@ -21,11 +21,9 @@ import 'theme/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  Object? initError;
-
   try {
     await dotenv.load(fileName: '.env');
-    debugPrint('✓ Environment variables loaded');
+    print('✓ Environment variables loaded');
 
     final supabaseUrl = dotenv.env['SUPABASE_URL'];
     final supabaseKey = dotenv.env['SUPABASE_ANON_KEY'];
@@ -34,74 +32,24 @@ Future<void> main() async {
       throw Exception('Missing Supabase credentials in .env file');
     }
 
-    debugPrint('✓ Initializing Supabase...');
+    print('✓ Initializing Supabase...');
     await Supabase.initialize(
       url: supabaseUrl,
       anonKey: supabaseKey,
     );
-    debugPrint('✓ Supabase initialized successfully');
+    print('✓ Supabase initialized successfully');
 
-    debugPrint('✓ Initializing notifications...');
+    print('✓ Initializing notifications...');
     await NotificationService.initialize();
-    debugPrint('✓ Notifications initialized');
+    print('✓ Notifications initialized');
 
   } catch (e, stackTrace) {
-    initError = e;
-    debugPrint('❌ Initialization error: $e');
-    debugPrint('Stack trace: $stackTrace');
-  }
-
-  if (initError != null) {
-    runApp(InitializationErrorApp(errorMessage: initError.toString()));
-    return;
+    print('❌ Initialization error: $e');
+    print('Stack trace: $stackTrace');
+    // Show error to user
   }
 
   runApp(const MapSumbongApp());
-}
-
-class InitializationErrorApp extends StatelessWidget {
-  final String errorMessage;
-
-  const InitializationErrorApp({super.key, required this.errorMessage});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 56),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'App initialization failed',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Please check your app configuration and try again.',
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    errorMessage,
-                    style: const TextStyle(color: Colors.black54),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class MapSumbongApp extends StatelessWidget {
