@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/messages_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../models/report.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/report_card.dart';
+import '../location/location_picker_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,6 +20,33 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   ReportsProvider? _reportsProvider;
+
+  Future<void> _startNewReport() async {
+    Provider.of<MessagesProvider>(context, listen: false).clearGpsCoordinates();
+
+    final LatLng? picked = await Navigator.of(context).push<LatLng>(
+      MaterialPageRoute(
+        builder: (_) => const LocationPickerScreen(),
+        fullscreenDialog: true,
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (picked == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pumili muna ng lokasyon bago magsimula ng report.'),
+        ),
+      );
+      return;
+    }
+
+    Provider.of<MessagesProvider>(context, listen: false)
+        .setGpsCoordinates(picked.latitude, picked.longitude);
+
+    context.go('/chat/new');
+  }
 
   @override
   void initState() {
@@ -94,6 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 background: _HeroBanner(
                   displayName: user?.getDisplayName(),
                   reports: reportsProvider.reports,
+                  onQuickReport: _startNewReport,
                 ),
               ),
             ),
@@ -104,6 +135,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(
                     AppSpacing.md, AppSpacing.lg, AppSpacing.md, 0),
                 child: _StatsRow(reports: reportsProvider.reports),
+              ),
+            ),
+
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
+                child: _QuickActionsCard(
+                  onCreateReport: _startNewReport,
+                  onOpenMap: () => context.go('/map'),
+                  onOpenReports: () => context.go('/reports'),
+                ),
               ),
             ),
 
@@ -136,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: 'Wala pang mga report',
                     subtitle: 'Tumulong sa iyong komunidad sa pag-uulat ng mga problema.',
                     buttonLabel: 'Lumikha ng Report',
-                    onButton: () => context.go('/reports'),
+                    onButton: _startNewReport,
                   ),
                 ),
               )
@@ -166,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.go('/reports'),
+        onPressed: _startNewReport,
         backgroundColor: AppColors.primary,
         elevation: 0,
         icon: const Icon(Icons.add_location_alt_rounded, color: Colors.white),
@@ -189,8 +232,13 @@ class _HomeScreenState extends State<HomeScreen> {
 class _HeroBanner extends StatelessWidget {
   final String? displayName;
   final List<Report> reports;
+  final VoidCallback onQuickReport;
 
-  const _HeroBanner({this.displayName, required this.reports});
+  const _HeroBanner({
+    this.displayName,
+    required this.reports,
+    required this.onQuickReport,
+  });
 
   String get _greeting {
     final hour = DateTime.now().hour;
@@ -241,6 +289,29 @@ class _HeroBanner extends StatelessWidget {
               // Quick status row
               if (reports.isNotEmpty)
                 _QuickStatus(reports: reports),
+              const SizedBox(height: 10),
+              ElevatedButton.icon(
+                onPressed: onQuickReport,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  backgroundColor: Colors.white,
+                  foregroundColor: AppColors.primary,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.full),
+                  ),
+                ),
+                icon: const Icon(Icons.add_location_alt_rounded, size: 18),
+                label: const Text(
+                  'Bagong report sa AI chat',
+                  style: TextStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -345,7 +416,7 @@ class _StatsRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         StatCard(
-          label: 'Nakabinbin',
+          label: 'Aktibo',
           value: pending.toString(),
           color: AppColors.medium,
           icon: Icons.hourglass_top_rounded,
@@ -358,6 +429,121 @@ class _StatsRow extends StatelessWidget {
           icon: Icons.task_alt_rounded,
         ),
       ],
+    );
+  }
+}
+
+class _QuickActionsCard extends StatelessWidget {
+  final VoidCallback onCreateReport;
+  final VoidCallback onOpenMap;
+  final VoidCallback onOpenReports;
+
+  const _QuickActionsCard({
+    required this.onCreateReport,
+    required this.onOpenMap,
+    required this.onOpenReports,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Mabilisang Aksyon',
+            style: TextStyle(
+              fontFamily: 'Nunito',
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _ActionButton(
+                  icon: Icons.auto_awesome_rounded,
+                  label: 'AI Report',
+                  onTap: onCreateReport,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ActionButton(
+                  icon: Icons.map_rounded,
+                  label: 'Mapa',
+                  onTap: onOpenMap,
+                  color: AppColors.accent,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ActionButton(
+                  icon: Icons.list_alt_rounded,
+                  label: 'Mga Report',
+                  onTap: onOpenReports,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color color;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      onTap: onTap,
+      child: Ink(
+        height: 88,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Nunito',
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
