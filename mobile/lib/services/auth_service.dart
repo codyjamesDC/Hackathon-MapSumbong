@@ -54,8 +54,9 @@ class AuthService {
   // Get current user
   static app_user.User? getCurrentUser() {
     final session = _supabase.auth.currentSession;
-    if (session?.user != null) {
-      return app_user.User.fromSupabaseUser(session!.user!);
+    final sessionUser = session?.user;
+    if (sessionUser != null) {
+      return app_user.User.fromSupabaseUser(sessionUser);
     }
     return null;
   }

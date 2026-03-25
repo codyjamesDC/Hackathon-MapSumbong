@@ -39,8 +39,9 @@ class AuthProvider with ChangeNotifier {
   void _handleAuthStateChange(supabase.AuthState event) {
     switch (event.event) {
       case supabase.AuthChangeEvent.signedIn:
-        if (event.session?.user != null) {
-          _user = app_user.User.fromSupabaseUser(event.session!.user!);
+        final signedInUser = event.session?.user;
+        if (signedInUser != null) {
+          _user = app_user.User.fromSupabaseUser(signedInUser);
           _error = null;
         }
         break;
@@ -49,8 +50,9 @@ class AuthProvider with ChangeNotifier {
         _error = null;
         break;
       case supabase.AuthChangeEvent.tokenRefreshed:
-        if (event.session?.user != null) {
-          _user = app_user.User.fromSupabaseUser(event.session!.user!);
+        final refreshedUser = event.session?.user;
+        if (refreshedUser != null) {
+          _user = app_user.User.fromSupabaseUser(refreshedUser);
         }
         break;
       default:
@@ -100,8 +102,9 @@ class AuthProvider with ChangeNotifier {
     try {
       final response = await AuthService.verifyOTP(phoneNumber, otp);
       if (_isStaleOp(opId)) return;
-      if (response.user != null) {
-        _user = app_user.User.fromSupabaseUser(response.user!);
+      final verifiedUser = response.user;
+      if (verifiedUser != null) {
+        _user = app_user.User.fromSupabaseUser(verifiedUser);
       }
     } catch (e) {
       if (_isStaleOp(opId)) return;
