@@ -259,7 +259,7 @@ class _ChatScreenState extends State<ChatScreen> {
             IconButton(
               icon: const Icon(Icons.info_outline_rounded,
                   color: AppColors.textSecondary, size: 20),
-              onPressed: () => context.go('/reports/${widget.reportId}'),
+              onPressed: () => context.push('/reports/${widget.reportId}'),
             ),
         ],
       ),

@@ -78,7 +78,7 @@ class _ReportsListScreenState extends State<ReportsListScreen>
     Provider.of<MessagesProvider>(context, listen: false)
         .setGpsCoordinates(picked.latitude, picked.longitude);
 
-    context.go('/chat/new');
+    context.push('/chat/new');
   }
 
   @override
@@ -98,7 +98,7 @@ class _ReportsListScreenState extends State<ReportsListScreen>
           ),
           IconButton(
             icon: const Icon(Icons.map_outlined, color: AppColors.textSecondary),
-            onPressed: () => context.go('/map'),
+            onPressed: () => context.push('/map'),
           ),
           const SizedBox(width: 4),
         ],
@@ -175,7 +175,7 @@ class _ReportsListScreenState extends State<ReportsListScreen>
                 statusFilter: t.status,
                 reportsProvider: reportsProvider,
                 onRefresh: _loadReports,
-                onTap: (id) => context.go('/reports/$id'),
+                onTap: (id) => context.push('/reports/$id'),
               )).toList(),
             ),
           ),

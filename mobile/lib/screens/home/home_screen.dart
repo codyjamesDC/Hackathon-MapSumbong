@@ -45,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Provider.of<MessagesProvider>(context, listen: false)
         .setGpsCoordinates(picked.latitude, picked.longitude);
 
-    context.go('/chat/new');
+    context.push('/chat/new');
   }
 
   @override
@@ -103,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     child: const Icon(Icons.map_outlined, color: Colors.white, size: 18),
                   ),
-                  onPressed: () => context.go('/map'),
+                  onPressed: () => context.push('/map'),
                 ),
                 const SizedBox(width: 4),
                 IconButton(
@@ -116,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     child: const Icon(Icons.person_outline_rounded, color: Colors.white, size: 18),
                   ),
-                  onPressed: () => context.go('/profile'),
+                  onPressed: () => context.push('/profile'),
                 ),
                 const SizedBox(width: 8),
               ],
@@ -144,8 +144,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
                 child: _QuickActionsCard(
                   onCreateReport: _startNewReport,
-                  onOpenMap: () => context.go('/map'),
-                  onOpenReports: () => context.go('/reports'),
+                  onOpenMap: () => context.push('/map'),
+                  onOpenReports: () => context.push('/reports'),
                 ),
               ),
             ),
@@ -158,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: SectionHeader(
                   title: 'Mga Kamakailang Report',
                   action: 'Tingnan lahat',
-                  onAction: () => context.go('/reports'),
+                  onAction: () => context.push('/reports'),
                 ),
               ),
             ),
@@ -197,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                         child: ReportCard(
                           report: report,
-                          onTap: () => context.go('/reports/${report.id}'),
+                          onTap: () => context.push('/reports/${report.id}'),
                         ),
                       );
                     },

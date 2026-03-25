@@ -123,12 +123,12 @@ class _MapScreenState extends State<MapScreen> {
                 onViewDetail: () {
                   final id = _selectedReport!.id;
                   setState(() => _selectedReport = null);
-                  context.go('/reports/$id');
+                  context.push('/reports/$id');
                 },
                 onChat: () {
                   final id = _selectedReport!.id;
                   setState(() => _selectedReport = null);
-                  context.go('/chat/$id');
+                  context.push('/chat/$id');
                 },
               ),
             ),
