@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from google import genai
@@ -19,6 +19,7 @@ from prompts import (
     build_extraction_prompt,
 )
 from routes import reports, telegram
+from utils.security import build_rate_limit_middleware, require_roles
 
 # ── Supabase client ───────────────────────────────────────────────────────────
 def _get_supabase():
@@ -57,6 +58,7 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
+app.middleware('http')(build_rate_limit_middleware())
 
 app.include_router(reports.router, tags=['reports'])
 app.include_router(telegram.router, prefix='/telegram', tags=['telegram'])
@@ -89,7 +91,10 @@ def detailed_health():
 # ── Main chat / report-creation endpoint ──────────────────────────────────────
 
 @app.post('/process-message')
-async def process_message(payload: dict):
+async def process_message(
+    payload: dict,
+    _user: dict = Depends(require_roles('user', 'admin')),
+):
     """
     Multi-turn AI conversation that extracts a structured report.
 
@@ -293,7 +298,10 @@ async def _geocode(location_text: str) -> dict | None:
 # ── Submit confirmed report to Supabase ───────────────────────────────────────
 
 @app.post('/submit-report')
-async def submit_report(payload: dict):
+async def submit_report(
+    payload: dict,
+    _user: dict = Depends(require_roles('user', 'admin')),
+):
     try:
         supabase = _get_supabase()
 
@@ -326,7 +334,10 @@ async def submit_report(payload: dict):
 
 
 @app.post('/send-message')
-async def send_message(payload: dict):
+async def send_message(
+    payload: dict,
+    _user: dict = Depends(require_roles('user', 'admin')),
+):
     try:
         supabase = _get_supabase()
         report_id = payload.get('report_id')
@@ -361,13 +372,19 @@ async def send_message(payload: dict):
 # ── Session helpers ────────────────────────────────────────────────────────────
 
 @app.get('/session/{session_id}')
-def get_session(session_id: str):
+def get_session(
+    session_id: str,
+    _user: dict = Depends(require_roles('user', 'admin')),
+):
     history = sessions.get(session_id, [])
     return {'session_id': session_id, 'history': history, 'message_count': len(history)}
 
 
 @app.delete('/session/{session_id}')
-def clear_session(session_id: str):
+def clear_session(
+    session_id: str,
+    _user: dict = Depends(require_roles('user', 'admin')),
+):
     sessions.pop(session_id, None)
     return {'success': True}
 

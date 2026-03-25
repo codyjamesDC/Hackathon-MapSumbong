@@ -6,6 +6,7 @@
   import Topbar from './lib/Topbar.svelte';
   import Toast from './lib/Toast.svelte';
   import TransparencyFeed from './lib/TransparencyFeed.svelte';
+  import ProfileScreen from './lib/ProfileScreen.svelte';
   import { selectedIncident, toastMsg, incidents } from './lib/store.js';
   import { fetchIncidents, subscribeToIncidents } from './lib/api.js';
 
@@ -13,6 +14,12 @@
   let toastText = '';
   let feedOpen = false;
   let ws = null;
+  let route = window.location.hash === '#/profile' ? 'profile' : 'dashboard';
+
+  const navigate = (nextRoute) => {
+    route = nextRoute;
+    window.location.hash = nextRoute === 'profile' ? '/profile' : '/';
+  };
 
   toastMsg.subscribe(msg => {
     if (msg) {
@@ -24,6 +31,10 @@
 
   onMount(() => {
     let mounted = true;
+    const onHashChange = () => {
+      route = window.location.hash === '#/profile' ? 'profile' : 'dashboard';
+    };
+    window.addEventListener('hashchange', onHashChange);
 
     (async () => {
       try {
@@ -43,6 +54,7 @@
     return () => {
       mounted = false;
       if (ws) ws.close();
+      window.removeEventListener('hashchange', onHashChange);
     };
   });
 </script>
@@ -57,38 +69,42 @@
   <MapView />
 
   <!-- Topbar overlay -->
-  <Topbar on:feedopen={() => feedOpen = true} />
+  <Topbar on:feedopen={() => feedOpen = true} on:profile={() => navigate('profile')} />
 
-  <!-- Floating sidebar overlay (left) -->
-  <Sidebar />
+  {#if route === 'dashboard'}
+    <!-- Floating sidebar overlay (left) -->
+    <Sidebar />
 
-  <!-- Detail card overlay (right, appears on selection) -->
-  {#if $selectedIncident}
-    <DetailCard />
+    <!-- Detail card overlay (right, appears on selection) -->
+    {#if $selectedIncident}
+      <DetailCard />
+    {/if}
+
+    <!-- Bottom center actions -->
+    <div class="bottom-actions">
+      <button class="action-btn accent" on:click={() => {
+        const types = [
+          {type:'Flash Flood',category:'flood',severity:'critical',barangay:'Brgy. Nangka',location:'Near Nangka Elementary',lat:14.651,lng:121.101,description:'Bumabaha na dito. Tuhod na halos.',ai:'Flash flood confirmed. 14 reports clustered.',action:'Lumikas agad.',authorities:['MDRRMO','Barangay Captain'],reports:14,radius:400},
+          {type:'Structure Fire',category:'fire',severity:'critical',barangay:'Brgy. Poblacion',location:'Near Poblacion Market',lat:14.561,lng:121.020,description:'May sunog! Kumakalat na.',ai:'Active fire in dense area.',action:'Tumawag sa BFP: 160.',authorities:['BFP','PNP'],reports:9,radius:300},
+          {type:'Road Hazard',category:'infrastructure',severity:'high',barangay:'Brgy. Guadalupe',location:'EDSA Guadalupe',lat:14.566,lng:121.044,description:'Malaking butas at baha.',ai:'Multi-lane blockage confirmed.',action:'Iwasan ang EDSA Guadalupe.',authorities:['MMDA'],reports:7,radius:250}
+        ];
+        const s = types[Math.floor(Math.random()*types.length)];
+        const inc = {...s, id:Date.now(), time:'Just now', channel:['Telegram','SMS','Messenger'][Math.floor(Math.random()*3)], resolved:false};
+        incidents.update(l => [inc, ...l]);
+        selectedIncident.set(inc);
+        toastMsg.set('New report triaged by AI.');
+      }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        Simulate Report
+      </button>
+      <button class="action-btn" on:click={() => feedOpen = true}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        Transparency Feed
+      </button>
+    </div>
+  {:else if route === 'profile'}
+    <ProfileScreen on:back={() => navigate('dashboard')} />
   {/if}
-
-  <!-- Bottom center actions -->
-  <div class="bottom-actions">
-    <button class="action-btn accent" on:click={() => {
-      const types = [
-        {type:'Flash Flood',category:'flood',severity:'critical',barangay:'Brgy. Nangka',location:'Near Nangka Elementary',lat:14.651,lng:121.101,description:'Bumabaha na dito. Tuhod na halos.',ai:'Flash flood confirmed. 14 reports clustered.',action:'Lumikas agad.',authorities:['MDRRMO','Barangay Captain'],reports:14,radius:400},
-        {type:'Structure Fire',category:'fire',severity:'critical',barangay:'Brgy. Poblacion',location:'Near Poblacion Market',lat:14.561,lng:121.020,description:'May sunog! Kumakalat na.',ai:'Active fire in dense area.',action:'Tumawag sa BFP: 160.',authorities:['BFP','PNP'],reports:9,radius:300},
-        {type:'Road Hazard',category:'infrastructure',severity:'high',barangay:'Brgy. Guadalupe',location:'EDSA Guadalupe',lat:14.566,lng:121.044,description:'Malaking butas at baha.',ai:'Multi-lane blockage confirmed.',action:'Iwasan ang EDSA Guadalupe.',authorities:['MMDA'],reports:7,radius:250}
-      ];
-      const s = types[Math.floor(Math.random()*types.length)];
-      const inc = {...s, id:Date.now(), time:'Just now', channel:['Telegram','SMS','Messenger'][Math.floor(Math.random()*3)], resolved:false};
-      incidents.update(l => [inc, ...l]);
-      selectedIncident.set(inc);
-      toastMsg.set('New report triaged by AI.');
-    }}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-      Simulate Report
-    </button>
-    <button class="action-btn" on:click={() => feedOpen = true}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-      Transparency Feed
-    </button>
-  </div>
 </div>
 
 <TransparencyFeed bind:open={feedOpen} />

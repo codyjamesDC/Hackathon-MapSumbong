@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 import httpx
 import os
+import tempfile
 
 from services.whisper_service import transcribe_audio
 from services.gemini_service import process_message as process_with_gemini
@@ -51,11 +52,75 @@ async def telegram_webhook(request: Request):
 
         # Handle voice messages
         elif 'voice' in message:
-            # TODO: Download audio, transcribe with Whisper, process
-            await send_telegram_message(
-                chat_id,
-                "Voice message support coming soon! Para sa ngayon, i-type lang po ang inyong report."
-            )
+            voice = message.get('voice', {})
+            file_id = voice.get('file_id')
+            if not file_id:
+                await send_telegram_message(
+                    chat_id,
+                    'Hindi mabasa ang voice file. Pakisubukan ulit.'
+                )
+                return {'ok': True}
+
+            if not TELEGRAM_BOT_TOKEN:
+                await send_telegram_message(
+                    chat_id,
+                    'Server misconfiguration: missing Telegram bot token.'
+                )
+                return {'ok': True}
+
+            temp_path = None
+            try:
+                async with httpx.AsyncClient(timeout=20.0) as client:
+                    # 1) Resolve Telegram file path from file_id
+                    file_resp = await client.get(
+                        f'{TELEGRAM_API_BASE}/getFile',
+                        params={'file_id': file_id},
+                    )
+                    file_data = file_resp.json()
+                    tg_path = file_data.get('result', {}).get('file_path')
+                    if not tg_path:
+                        await send_telegram_message(
+                            chat_id,
+                            'Hindi ma-download ang voice file. Pakisubukan ulit.'
+                        )
+                        return {'ok': True}
+
+                    # 2) Download binary voice payload
+                    download_url = (
+                        f'https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{tg_path}'
+                    )
+                    audio_resp = await client.get(download_url)
+                    audio_resp.raise_for_status()
+
+                suffix = '.ogg'
+                if '.' in tg_path:
+                    suffix = f".{tg_path.rsplit('.', 1)[-1]}"
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
+                    temp_path = temp.name
+                    temp.write(audio_resp.content)
+
+                # 3) Transcribe and send plain transcript back to user
+                result = await transcribe_audio(temp_path)
+                text = (result.get('text') or '').strip()
+                if text:
+                    await send_telegram_message(
+                        chat_id,
+                        f'📝 Transcribed text:\n{text}'
+                    )
+                else:
+                    await send_telegram_message(
+                        chat_id,
+                        'Na-download ang audio pero walang malinaw na transcription.'
+                    )
+            except Exception as e:
+                print(f'Telegram voice handling error: {e}')
+                await send_telegram_message(
+                    chat_id,
+                    'Nagka-problema sa pag-process ng voice message. Pakisubukan ulit.'
+                )
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    os.remove(temp_path)
 
         # Handle photos
         elif 'photo' in message:

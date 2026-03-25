@@ -1,5 +1,7 @@
 <script>
+  import { createEventDispatcher } from 'svelte';
   import { disasterMode, toastMsg, stats } from './store.js';
+  const dispatch = createEventDispatcher();
 
   function toggleDisaster() {
     disasterMode.update(v => {
@@ -60,6 +62,12 @@
     <button class="disaster-btn" class:active={$disasterMode} on:click={toggleDisaster}>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L1 21h22L12 2zm0 3.5L20.5 19h-17L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>
       {$disasterMode ? 'Exit Disaster Mode' : 'Disaster Mode'}
+    </button>
+    <button class="profile-btn" title="Open profile" aria-label="Open profile" on:click={() => dispatch('profile')}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M20 21a8 8 0 0 0-16 0"/>
+        <circle cx="12" cy="7" r="4"/>
+      </svg>
     </button>
   </div>
 </header>
@@ -157,4 +165,22 @@
   }
   .disaster-btn:hover { background: rgba(255,69,96,0.15); }
   .disaster-btn.active { background: #ff4560; color: white; border-color: #ff4560; }
+
+  .profile-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.05);
+    color: #bcbccc;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .profile-btn:hover {
+    color: #00c896;
+    border-color: rgba(0,200,150,0.28);
+    background: rgba(0,200,150,0.08);
+  }
 </style>
