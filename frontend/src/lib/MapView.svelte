@@ -9,11 +9,22 @@
   let markerLayer = {};
   let circleLayer = {};
   let markerSnapshot = {};
+  let puzzleLayer = null;
   let currentTile = null;
   let styleMenuOpen = false;
-  let activeStyle = 'dark';
+  let activeStyle = 'puzzle';
+
+  const BATONG_MALAKE_CENTER = [14.1678, 121.2424];
 
   const MAP_STYLES = [
+    {
+      id: 'puzzle',
+      label: 'Puzzle',
+      icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>`,
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      filter: 'brightness(0.82) contrast(1.22) saturate(0.75) hue-rotate(12deg)',
+      subdomains: ['a','b','c']
+    },
     {
       id: 'dark',
       label: 'Dark',
@@ -77,7 +88,72 @@
     currentTile = L.tileLayer(style.url, opts).addTo(map);
     document.getElementById('tile-filter-style').textContent =
       `.leaflet-tile-pane { filter: ${style.filter} !important; }`;
+    syncPuzzleOverlay();
     styleMenuOpen = false;
+  }
+
+  function drawPuzzleOverlay() {
+    if (!map) return;
+    if (puzzleLayer) {
+      puzzleLayer.remove();
+      puzzleLayer = null;
+    }
+
+    const [clat, clng] = BATONG_MALAKE_CENTER;
+    const colors = ['#ffe08a', '#f6b26b', '#8ad1c2', '#7ea6ff'];
+    const group = L.layerGroup();
+    const rows = 6;
+    const cols = 8;
+    const dLat = 0.0022;
+    const dLng = 0.0026;
+    const startLat = clat - (rows * dLat) / 2;
+    const startLng = clng - (cols * dLng) / 2;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const lat0 = startLat + r * dLat;
+        const lng0 = startLng + c * dLng;
+        const lat1 = lat0 + dLat;
+        const lng1 = lng0 + dLng;
+        const colA = colors[(r + c) % colors.length];
+        const colB = colors[(r + c + 1) % colors.length];
+
+        L.polygon(
+          [[lat0, lng0], [lat1, lng0], [lat1, lng1]],
+          {
+            color: '#121212',
+            weight: 1,
+            fillColor: colA,
+            fillOpacity: 0.09,
+            interactive: false,
+          }
+        ).addTo(group);
+
+        L.polygon(
+          [[lat0, lng0], [lat0, lng1], [lat1, lng1]],
+          {
+            color: '#121212',
+            weight: 1,
+            fillColor: colB,
+            fillOpacity: 0.09,
+            interactive: false,
+          }
+        ).addTo(group);
+      }
+    }
+
+    group.addTo(map);
+    puzzleLayer = group;
+  }
+
+  function syncPuzzleOverlay() {
+    if (!map) return;
+    if (activeStyle === 'puzzle') {
+      drawPuzzleOverlay();
+    } else if (puzzleLayer) {
+      puzzleLayer.remove();
+      puzzleLayer = null;
+    }
   }
 
   function mkIcon(inc) {
@@ -165,14 +241,14 @@
     document.head.appendChild(s);
 
     map = L.map(mapEl, {
-      center: [14.5995, 120.9842],
-      zoom: 12,
+      center: BATONG_MALAKE_CENTER,
+      zoom: 14,
       zoomControl: false,
       attributionControl: false,
       preferCanvas: false
     });
 
-    applyStyle('dark');
+    applyStyle('puzzle');
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
     const unsub = incidents.subscribe(renderAll);
