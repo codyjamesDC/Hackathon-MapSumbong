@@ -67,7 +67,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           IconButton(
             icon: const Icon(Icons.chat_rounded, color: AppColors.primary),
             tooltip: 'Chat with authorities',
-            onPressed: () => context.go('/chat/${report.id}'),
+            onPressed: () => context.push('/chat/${report.id}'),
           ),
       ],
     );
@@ -173,6 +173,9 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           padding: const EdgeInsets.all(16),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
+            _HeaderCard(report: report),
+            const SizedBox(height: 14),
+
             // Status banner
             _StatusBanner(status: report.status),
             const SizedBox(height: 20),
@@ -234,10 +237,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
             // Timestamps
             _SectionLabel('Timeline'),
-            const SizedBox(height: 6),
-            _TimelineRow('Reported', report.createdAt),
-            if (report.resolvedAt != null)
-              _TimelineRow('Resolved', report.resolvedAt!),
+            const SizedBox(height: 10),
+            _TimelineCard(report: report),
 
             // SDG tag
             if (report.sdgTag != null) ...[
@@ -330,7 +331,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => context.go('/chat/${report.id}'),
+                onPressed: () => context.push('/chat/${report.id}'),
                 icon: const Icon(Icons.chat),
                 label: const Text('Chat with Authorities'),
                 style: ElevatedButton.styleFrom(
@@ -588,6 +589,252 @@ class _TimelineRow extends StatelessWidget {
             style: const TextStyle(fontSize: 13),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HeaderCard extends StatelessWidget {
+  final Report report;
+
+  const _HeaderCard({required this.report});
+
+  String _formatIssueType(String type) => type
+      .split('_')
+      .map((w) => w[0].toUpperCase() + w.substring(1))
+      .join(' ');
+
+  IconData _issueIcon(String type) {
+    switch (type) {
+      case 'flood':
+        return Icons.water;
+      case 'fire':
+        return Icons.local_fire_department;
+      case 'road':
+      case 'pothole':
+        return Icons.construction;
+      case 'power':
+      case 'broken_streetlight':
+        return Icons.bolt;
+      case 'waste':
+      case 'garbage':
+        return Icons.delete;
+      case 'water':
+        return Icons.water_drop;
+      case 'emergency':
+        return Icons.emergency;
+      default:
+        return Icons.report_problem;
+    }
+  }
+
+  String _formatDate(DateTime dt) {
+    return '${dt.day}/${dt.month}/${dt.year} '
+        '${dt.hour.toString().padLeft(2, '0')}:'
+        '${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _InfoChip(
+                label: report.statusLabel,
+                color: report.urgencyColor,
+                icon: Icons.flag_rounded,
+              ),
+              const SizedBox(width: 8),
+              _InfoChip(
+                label: _formatIssueType(report.issueType),
+                color: AppColors.primary,
+                icon: _issueIcon(report.issueType),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.location_on_outlined,
+                  size: 16, color: AppColors.textMuted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  report.locationText?.isNotEmpty == true
+                      ? '${report.locationText}, ${report.barangay}'
+                      : report.barangay,
+                  style: const TextStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Icon(Icons.schedule_rounded,
+                  size: 16, color: AppColors.textMuted),
+              const SizedBox(width: 6),
+              Text(
+                'Nireport noong ${_formatDate(report.createdAt)}',
+                style: const TextStyle(
+                  fontFamily: 'Nunito',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimelineCard extends StatelessWidget {
+  final Report report;
+
+  const _TimelineCard({required this.report});
+
+  List<({String title, String subtitle, DateTime time})> get _events {
+    final events = <({String title, String subtitle, DateTime time})>[
+      (
+        title: 'Report submitted',
+        subtitle: 'Natanggap ng system ang ulat mo.',
+        time: report.createdAt,
+      ),
+      (
+        title: 'Current status: ${report.statusLabel}',
+        subtitle: 'Huling update sa report status.',
+        time: report.updatedAt,
+      ),
+    ];
+
+    if (report.resolvedAt != null) {
+      events.add((
+        title: 'Marked resolved',
+        subtitle: report.resolutionNote?.isNotEmpty == true
+            ? report.resolutionNote!
+            : 'Tinarkahang resolved ng barangay.',
+        time: report.resolvedAt!,
+      ));
+    }
+
+    events.sort((a, b) => b.time.compareTo(a.time));
+    return events;
+  }
+
+  String _formatDate(DateTime dt) {
+    return '${dt.day}/${dt.month}/${dt.year} '
+        '${dt.hour.toString().padLeft(2, '0')}:'
+        '${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final events = _events;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: List.generate(events.length, (index) {
+          final event = events[index];
+          final isLatest = index == 0;
+          final hasNext = index < events.length - 1;
+
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 20,
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: isLatest ? AppColors.primary : AppColors.textMuted,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      if (hasNext)
+                        Expanded(
+                          child: Container(
+                            width: 2,
+                            margin: const EdgeInsets.symmetric(vertical: 3),
+                            color: AppColors.border,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          event.title,
+                          style: TextStyle(
+                            fontFamily: 'Nunito',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color:
+                                isLatest ? AppColors.primary : AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          event.subtitle,
+                          style: const TextStyle(
+                            fontFamily: 'Nunito',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary,
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          _formatDate(event.time),
+                          style: const TextStyle(
+                            fontFamily: 'Nunito',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
       ),
     );
   }

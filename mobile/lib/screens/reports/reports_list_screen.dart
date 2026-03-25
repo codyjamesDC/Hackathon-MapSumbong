@@ -18,6 +18,8 @@ class ReportsListScreen extends StatefulWidget {
 class _ReportsListScreenState extends State<ReportsListScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late final TextEditingController _searchController;
+  String _searchQuery = '';
 
   static const _tabs = [
     (label: 'Lahat', status: ''),
@@ -31,6 +33,7 @@ class _ReportsListScreenState extends State<ReportsListScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
+    _searchController = TextEditingController();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadReports());
   }
 
@@ -48,6 +51,7 @@ class _ReportsListScreenState extends State<ReportsListScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -115,6 +119,29 @@ class _ReportsListScreenState extends State<ReportsListScreen>
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: TextField(
+              controller: _searchController,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Maghanap: issue, barangay, detalye, report ID',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _searchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+              ),
+              onChanged: (value) {
+                setState(() => _searchQuery = value.trim().toLowerCase());
+              },
+            ),
+          ),
           if (reportsProvider.error != null)
             MaterialBanner(
               backgroundColor: AppColors.criticalLight,
@@ -149,6 +176,7 @@ class _ReportsListScreenState extends State<ReportsListScreen>
                 statusFilter: t.status,
                 reportsProvider: reportsProvider,
                 onRefresh: _loadReports,
+                searchQuery: _searchQuery,
                 onTap: (id) => context.push('/reports/$id'),
               )).toList(),
             ),
@@ -185,12 +213,14 @@ class _ReportTabView extends StatelessWidget {
   final String statusFilter;
   final ReportsProvider reportsProvider;
   final Future<void> Function() onRefresh;
+  final String searchQuery;
   final void Function(String) onTap;
 
   const _ReportTabView({
     required this.statusFilter,
     required this.reportsProvider,
     required this.onRefresh,
+    required this.searchQuery,
     required this.onTap,
   });
 
@@ -217,6 +247,19 @@ class _ReportTabView extends StatelessWidget {
     }
 
     final items = _filtered;
+    final filteredBySearch = searchQuery.isEmpty
+        ? items
+        : items.where((r) {
+            final haystack = [
+              r.id,
+              r.issueType,
+              r.description,
+              r.barangay,
+              r.locationText ?? '',
+              r.status,
+            ].join(' ').toLowerCase();
+            return haystack.contains(searchQuery);
+          }).toList();
 
     if (items.isEmpty) {
       return EmptyStateView(
@@ -232,17 +275,25 @@ class _ReportTabView extends StatelessWidget {
       );
     }
 
+    if (filteredBySearch.isEmpty) {
+      return EmptyStateView(
+        icon: Icons.search_off_rounded,
+        title: 'Walang tumugmang report',
+        subtitle: 'Subukang baguhin ang keyword o filter.',
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: onRefresh,
       color: AppColors.primary,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-        itemCount: items.length,
+        itemCount: filteredBySearch.length,
         itemBuilder: (context, index) => Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: ReportCard(
-            report: items[index],
-            onTap: () => onTap(items[index].id),
+            report: filteredBySearch[index],
+            onTap: () => onTap(filteredBySearch[index].id),
           ),
         ),
       ),
