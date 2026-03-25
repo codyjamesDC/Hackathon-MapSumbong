@@ -42,12 +42,12 @@
    - Validation runs before service initialization (prevents silent failures)
 
 2. **[routes/telegram.py](routes/telegram.py)** - Enhanced Telegram Integration
-   - Added imports: `hmac`, `hashlib`, structured logging
+  - Added imports: `hmac`, structured logging
    - Replaced all `print()` statements with logger calls (DEBUG, INFO, WARNING, ERROR levels)
-   - **Security**: Added `_validate_telegram_signature()` function
+  - **Security**: Added `_validate_telegram_secret()` function
     - Validates X-Telegram-Bot-Api-Secret-Token header
      - Uses constant-time comparison to prevent timing attacks
-     - Logs signature verification results
+    - Logs secret-token verification results
    - **Auditing**: Webhook logging now includes:
      - Incoming update_id, message_id, chat_id, user_id
      - Message type (text, voice, photo)
@@ -76,13 +76,13 @@
 
 2. **[docs/SMS_INTEGRATION_GUIDE.md](docs/SMS_INTEGRATION_GUIDE.md)** - SMS Gateway Design
    - **Status**: Design document for future implementation (not required for MVP)
-   - **Architecture**: SMS → Gateway → /api/sms/webhook → Report creation + AI → Response SMS
+  - **Architecture**: SMS → Gateway → /sms/webhook (planned) → Report creation + AI → Response SMS
    - **Supported Gateways**: Twilio, Plivo, AWS SNS, Vonage (with cost comparison table)
    - **Implementation Pattern**:
      - `services/sms_service.py` with abstract `SMSProvider` interface
      - Concrete implementations: `TwilioProvider`, `PlivoProvider`
      - `routes/sms.py` webhook handlers for both providers
-     - Request validation with signature verification
+    - Request validation with webhook-secret verification
    - **Setup Instructions**: Step-by-step for Twilio (free tier) and Plivo (PH optimized)
    - **Cost Analysis**: Per-transaction estimates for 5K residents, 2 reports/week
    - **Testing**: Local mock provider, production verification via curl
@@ -109,12 +109,12 @@ Structured Logging Flow:
 **Log Levels Used:**
 - **DEBUG**: File only - verbose trace data (transcription start, file downloads)
 - **INFO**: Both console + file - normal operation milestones (report created, webhook received)
-- **WARNING**: Both - unexpected but recoverable (missing headers, signature mismatch)
+- **WARNING**: Both - unexpected but recoverable (missing headers, secret-token mismatch)
 - **ERROR**: Both + stack trace - failures requiring attention (API errors, validation failures)
 
 ### Security Enhancements
 
-1. **Telegram Webhook Signature Verification**
+1. **Telegram Webhook Secret Validation**
   - Validates `X-Telegram-Bot-Api-Secret-Token` header
    - Prevents spoofed messages from unauthorized sources
    - Uses constant-time comparison (prevents timing attacks)
@@ -149,7 +149,7 @@ Resident without internet
 
 - **Entry**: Resident messages @mapsumbong_bot (or @mapsumbong_dev_bot for testing)
 - **Processing**: 
-  1. Validate webhook signature (new security feature)
+  1. Validate webhook secret token (new security feature)
   2. Log incoming message (new auditing feature)
   3. Process text/voice via Gemini AI
   4. Extract issue type, location, urgency
@@ -174,8 +174,8 @@ Resident without internet
 ### Backend Startup Validation
 
 ```bash
-# Run startup validation
-$ python main.py
+# Run startup validation + start app
+$ uvicorn main:app --reload
 
 # Output:
 ================================================
@@ -187,7 +187,7 @@ Environment Configuration Status
 ✓ Telegram bot configured (webhook ready)
 ✗ SMS provider not configured (optional)
 ================================================
-Ready to start. Run: python main.py
+Ready to start. Run: uvicorn main:app --reload
 ================================================
 
 Logging initialized. Log file: logs/mapsumbong_20240115.log
@@ -236,7 +236,7 @@ mapsumbong/backend/
 │   ├── environment.py              [CREATED: EnvironmentValidator class]
 │   └── logging.py                  [CREATED: StructuredLogger class]
 ├── routes/
-│   ├── telegram.py                 [UPDATED: signature verification + logging]
+│   ├── telegram.py                 [UPDATED: secret-token validation + logging]
 │   └── reports.py                  [unchanged]
 ├── docs/
 │   ├── DEMO_SETUP_GUIDE.md         [CREATED: Complete setup walkthrough]
@@ -268,7 +268,7 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with Supabase, Gemini, Telegram credentials
 
-python main.py
+uvicorn main:app --reload
 # ✓ Environment validation runs
 # ✓ Startup report prints
 # ✓ Logs created in logs/ directory
@@ -339,7 +339,7 @@ cat logs/mapsumbong_20240115.log
 
 - [x] Environment validation implemented
 - [x] Logging configured and tested
-- [x] Telegram signature verification enabled
+- [x] Telegram webhook secret validation enabled
 - [x] Demo setup guide complete
 - [ ] RLS policies enabled in Supabase
 - [ ] Service key rotated and secured
@@ -369,7 +369,7 @@ docker run -p 8000:8000 \
 **MVP Release Hardening** is now complete:
 - ✅ Environment validation prevents silent startup failures
 - ✅ Structured logging enables troubleshooting and auditing
-- ✅ Telegram webhook signature verification adds security
+- ✅ Telegram webhook secret validation adds security
 - ✅ Complete demo setup guide enables smooth handoff
 
 **Offline Accessibility** is production-ready:

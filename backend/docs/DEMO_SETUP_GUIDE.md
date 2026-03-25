@@ -105,7 +105,7 @@ Environment Configuration Status
 ✗ SMS provider not configured (optional)
 
 ================================================
-Ready to start. Run: python main.py
+Ready to start. Run: uvicorn main:app --reload
 ================================================
 ```
 
@@ -113,7 +113,7 @@ Ready to start. Run: python main.py
 
 **Development** (auto-reload on file changes):
 ```bash
-python main.py
+uvicorn main:app --reload
 ```
 
 **Production** (with gunicorn):
@@ -128,7 +128,7 @@ docker run -p 8000:8000 --env-file .env mapsumbong-backend
 ```
 
 **Verify running:**
-- Health check: `curl http://localhost:8000/health` → `{"status":"ok"}`
+- Health check: `curl http://localhost:8000/health` → includes `"status": "healthy"`
 - View logs: Check console output for `Uvicorn running on http://0.0.0.0:8000`
 
 ---
@@ -250,13 +250,9 @@ Expected response: `{"ok": true}`
 3. Bot processes via Gemini AI
 4. Response: "Issue logged as Public Safety. Our team will review immediately."
 
-**Via SMS** (if configured):
-```bash
-# Test SMS endpoint directly
-curl -X POST http://localhost:8000/api/sms/webhook \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "From=%2B1234567890&Body=Flooded+road+in+Barangay+1&MessageSid=SM123456"
-```
+**Via SMS** (future feature):
+- SMS webhook routes are not implemented in the current backend build.
+- Use Telegram as the offline channel for the MVP demo.
 
 ### 4.2 Mobile App Demo Flow
 
@@ -297,7 +293,8 @@ curl -X POST http://localhost:8000/api/sms/webhook \
 **Backend Metrics:**
 ```bash
 curl http://localhost:8000/health
-curl http://localhost:8000/metrics
+# /metrics requires admin JWT in Authorization header
+curl http://localhost:8000/ready
 ```
 
 **Supabase Dashboard:**
@@ -365,7 +362,7 @@ curl http://localhost:8000/metrics
 ## Part 6: Demo Narrative (5-10 minutes)
 
 **Setup** (Before demo):
-1. Start backend: `python main.py`
+1. Start backend: `uvicorn main:app --reload`
 2. Open Flutter app on emulator/device
 3. Have Telegram app open on another device/window
 

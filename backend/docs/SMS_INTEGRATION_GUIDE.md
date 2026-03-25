@@ -17,7 +17,7 @@ Resident SMS
     ↓
 SMS Gateway (Twilio/Plivo/AWS SNS)
     ↓
-/api/sms/webhook (FastAPI)
+/sms/webhook (FastAPI, planned)
     ↓
 Report creation + Gemini AI processing
     ↓
@@ -294,7 +294,7 @@ async def test_sms(phone_number: str, message: str):
     """Manual SMS send for testing (dev only).
     
     Usage:
-    curl -X POST "http://localhost:8000/api/sms/test?phone_number=%2B1234567890&message=Hello"
+    curl -X POST "http://localhost:8000/sms/test?phone_number=%2B1234567890&message=Hello"
     """
     provider = get_sms_provider()
     if not provider:
@@ -351,7 +351,7 @@ external_id TEXT  -- Message ID from gateway (for deduplication)
 1. **Create Account**: https://www.twilio.com/console
 2. **Get Trial Number**: Projects → Phone Numbers → Get a number
 3. **Enable Webhooks**: Phone Numbers → Active Numbers → Your number → SMS → Webhooks
-   - URL: `https://your-domain.com/api/sms/webhook/twilio`
+    - URL: `https://your-domain.com/sms/webhook/twilio`
    - Method: POST
 4. **Get Credentials**:
    - Account SID: Settings → Account
@@ -371,7 +371,7 @@ external_id TEXT  -- Message ID from gateway (for deduplication)
 1. **Create Account**: https://www.plivo.com
 2. **Buy Phone Number**: Numbers → Search → Add number
 3. **Configure Webhook**: Phone Numbers → Your number → Message → Webhook URL
-   - URL: `https://your-domain.com/api/sms/webhook/plivo`
+    - URL: `https://your-domain.com/sms/webhook/plivo`
 4. **Get Credentials**:
    - Auth ID: Settings → API Credentials
    - Auth Token: Settings → API Credentials
@@ -412,7 +412,7 @@ class MockProvider(SMSProvider):
 
 ```bash
 # Use provider's SMS testing endpoints or send to test number (your own phone)
-curl -X POST http://localhost:8000/api/sms/test \
+curl -X POST http://localhost:8000/sms/test \
   -d "phone_number=%2B639123456789&message=Test+message"
 ```
 
