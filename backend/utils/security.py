@@ -25,7 +25,8 @@ def _extract_bearer_token(authorization: str | None) -> str:
 def verify_jwt_token(token: str) -> dict[str, Any]:
     """
     Validate JWT and return decoded claims.
-    Expected payload includes optional `role` (defaults to `user`).
+    Accepts custom tokens with `role`, or Supabase user JWTs (`role: authenticated`).
+    Optional `app_metadata.role` can elevate to `admin`.
     """
     if not JWT_SECRET:
         raise HTTPException(status_code=500, detail='JWT secret is not configured')
@@ -33,7 +34,15 @@ def verify_jwt_token(token: str) -> dict[str, Any]:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         if not isinstance(payload, dict):
             raise HTTPException(status_code=401, detail='Invalid token payload')
-        payload['role'] = payload.get('role', 'user')
+        raw = payload.get('role', 'user')
+        app_meta = payload.get('app_metadata')
+        if isinstance(app_meta, dict) and app_meta.get('role'):
+            payload['role'] = str(app_meta['role']).lower()
+        elif raw == 'authenticated':
+            # Supabase end-user access token
+            payload['role'] = 'user'
+        else:
+            payload['role'] = str(raw).lower()
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail='Token has expired')

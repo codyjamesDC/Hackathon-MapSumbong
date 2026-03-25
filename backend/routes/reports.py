@@ -96,8 +96,15 @@ async def get_report(
 async def update_report_status(
     report_id: str,
     request: UpdateStatusRequest,
-    _user: dict = Depends(require_roles('admin')),
+    user: dict = Depends(require_roles('user', 'admin')),
 ):
+    role = (user.get('role') or 'user').lower()
+    if role != 'admin' and request.status != 'reopened':
+        raise HTTPException(
+            status_code=403,
+            detail='Residents may only set status to reopened',
+        )
+
     supabase = _get_supabase()
     update_data = {'status': request.status}
 
@@ -115,10 +122,11 @@ async def update_report_status(
         if update_result.data is not None and len(update_result.data) == 0:
             raise HTTPException(status_code=404, detail='Report not found')
 
+        actor = request.updated_by or user.get('sub') or user.get('email') or 'system'
         supabase.table('audit_log').insert({
             'report_id': report_id,
             'action': 'status_change',
-            'performed_by': request.updated_by or 'system',
+            'performed_by': actor,
             'new_value': request.status,
             'note': f'Status changed to {request.status}',
         }).execute()

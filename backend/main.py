@@ -4,10 +4,14 @@ load_dotenv()  # Must be first — before any service imports read os.getenv()
 import uuid
 import json
 import os
+import time
+import sys
 from datetime import datetime
+from collections import defaultdict
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from google import genai
@@ -20,6 +24,8 @@ from prompts import (
 )
 from routes import reports, telegram
 from utils.security import build_rate_limit_middleware, require_roles
+from config.environment import EnvironmentValidator
+from config.logging import StructuredLogger
 
 # ── Supabase client ───────────────────────────────────────────────────────────
 def _get_supabase():
@@ -51,9 +57,83 @@ app = FastAPI(
     version='1.0.0',
 )
 
+# ── Initialize structured logging ──────────────────────────────────────────────
+logger = StructuredLogger.setup('mapsumbong')
+
+# ── Validate environment on startup ────────────────────────────────────────────
+def _validate_environment_startup():
+    """Validate environment variables. Exit with error if critical vars missing."""
+    logger.info('Validating environment configuration...')
+    
+    try:
+        validator = EnvironmentValidator()
+        
+        # Check required variables
+        is_valid, missing = validator.validate_required()
+        if not is_valid:
+            logger.error(f'Missing required environment variables: {missing}')
+            logger.error('Application cannot start without these variables.')
+            sys.exit(1)
+        
+        # Print startup report
+        logger.info('Environment validation passed.')
+        validator.print_startup_report()
+        
+    except Exception as e:
+        logger.error(f'Environment validation failed: {e}')
+        sys.exit(1)
+
+# Run validation on module load (before app starts)
+_validate_environment_startup()
+
+
+def _cors_allow_origins() -> list[str]:
+    raw = os.getenv('CORS_ALLOW_ORIGINS', '')
+    if raw.strip():
+        return [o.strip() for o in raw.split(',') if o.strip()]
+    if os.getenv('ENVIRONMENT', 'development').lower() == 'development':
+        return ['*']
+    return []
+
+
+_request_metrics = {
+    'total': 0,
+    'by_path': defaultdict(int),
+    'by_status': defaultdict(int),
+    'latency_ms_total': 0.0,
+}
+
+
+@app.middleware('http')
+async def request_metrics_middleware(request: Request, call_next):
+    start = time.perf_counter()
+    request_id = str(uuid.uuid4())
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        _request_metrics['total'] += 1
+        _request_metrics['by_path'][request.url.path] += 1
+        _request_metrics['by_status']['500'] += 1
+        _request_metrics['latency_ms_total'] += elapsed_ms
+        return JSONResponse(
+            status_code=500,
+            content={'detail': 'Internal server error', 'request_id': request_id},
+        )
+
+    elapsed_ms = (time.perf_counter() - start) * 1000.0
+    _request_metrics['total'] += 1
+    _request_metrics['by_path'][request.url.path] += 1
+    _request_metrics['by_status'][str(response.status_code)] += 1
+    _request_metrics['latency_ms_total'] += elapsed_ms
+    response.headers['X-Request-ID'] = request_id
+    response.headers['X-Response-Time-Ms'] = f'{elapsed_ms:.2f}'
+    return response
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],
+    allow_origins=_cors_allow_origins(),
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],
@@ -88,6 +168,38 @@ def detailed_health():
     }
 
 
+@app.get('/ready')
+def readiness():
+    missing = []
+    if not os.getenv('SUPABASE_URL'):
+        missing.append('SUPABASE_URL')
+    if not os.getenv('SUPABASE_SERVICE_KEY') and not os.getenv('SUPABASE_SERVICE_ROLE_KEY'):
+        missing.append('SUPABASE_SERVICE_KEY|SUPABASE_SERVICE_ROLE_KEY')
+    if not os.getenv('JWT_SECRET'):
+        missing.append('JWT_SECRET')
+
+    if missing:
+        return {
+            'ready': False,
+            'missing': missing,
+        }
+    return {'ready': True}
+
+
+@app.get('/metrics')
+def metrics(_user: dict = Depends(require_roles('admin'))):
+    total = _request_metrics['total']
+    avg_latency = (
+        _request_metrics['latency_ms_total'] / total if total > 0 else 0.0
+    )
+    return {
+        'total_requests': total,
+        'avg_latency_ms': round(avg_latency, 2),
+        'by_path': dict(_request_metrics['by_path']),
+        'by_status': dict(_request_metrics['by_status']),
+    }
+
+
 # ── Main chat / report-creation endpoint ──────────────────────────────────────
 
 @app.post('/process-message')
@@ -118,22 +230,30 @@ async def process_message(
             # never needs to ask for the barangay.
             if latitude is not None and longitude is not None:
                 location_info = await _reverse_geocode(latitude, longitude)
+                # Prepend a hidden system note so Gemini treats GPS as
+                # authoritative location even when reverse geocoding fails.
                 if location_info:
-                    # Prepend a hidden system note to the conversation
-                    # so Gemini already knows the location
                     location_context = (
                         f"[SYSTEM: The resident's GPS location has been captured. "
                         f"Coordinates: {latitude:.5f}, {longitude:.5f}. "
                         f"Address: {location_info}. "
                         f"Use this as the location — do NOT ask for barangay or address.]"
                     )
-                    sessions[session_id] = [{
-                        'role': 'user',
-                        'parts': [location_context]
-                    }, {
-                        'role': 'model',
-                        'parts': ['Noted. I have the location from GPS.']
-                    }]
+                else:
+                    location_context = (
+                        f"[SYSTEM: The resident's GPS location has been captured. "
+                        f"Coordinates: {latitude:.5f}, {longitude:.5f}. "
+                        f"Use these GPS coordinates as the report location. "
+                        f"Do NOT ask for barangay or address; infer locality from coordinates if needed.]"
+                    )
+
+                sessions[session_id] = [{
+                    'role': 'user',
+                    'parts': [location_context]
+                }, {
+                    'role': 'model',
+                    'parts': ['Noted. I have the location from GPS.']
+                }]
 
         history = sessions[session_id]
 

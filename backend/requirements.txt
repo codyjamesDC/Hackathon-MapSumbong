@@ -1,5 +1,6 @@
 fastapi
 uvicorn[standard]
+gunicorn
 supabase
 google-genai
 openai
@@ -7,3 +8,4 @@ python-dotenv
 httpx
 python-multipart
 PyJWT
+pytest
