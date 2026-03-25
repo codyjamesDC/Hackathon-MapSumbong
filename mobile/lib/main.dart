@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
@@ -18,12 +19,18 @@ import 'screens/location/location_picker_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'theme/app_theme.dart';
 
+void _logDebug(String message) {
+  if (kDebugMode) {
+    debugPrint(message);
+  }
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
     await dotenv.load(fileName: '.env');
-    print('✓ Environment variables loaded');
+    _logDebug('✓ Environment variables loaded');
 
     final supabaseUrl = dotenv.env['SUPABASE_URL'];
     final supabaseKey = dotenv.env['SUPABASE_ANON_KEY'];
@@ -32,20 +39,20 @@ Future<void> main() async {
       throw Exception('Missing Supabase credentials in .env file');
     }
 
-    print('✓ Initializing Supabase...');
+    _logDebug('✓ Initializing Supabase...');
     await Supabase.initialize(
       url: supabaseUrl,
       anonKey: supabaseKey,
     );
-    print('✓ Supabase initialized successfully');
+    _logDebug('✓ Supabase initialized successfully');
 
-    print('✓ Initializing notifications...');
+    _logDebug('✓ Initializing notifications...');
     await NotificationService.initialize();
-    print('✓ Notifications initialized');
+    _logDebug('✓ Notifications initialized');
 
   } catch (e, stackTrace) {
-    print('❌ Initialization error: $e');
-    print('Stack trace: $stackTrace');
+    _logDebug('❌ Initialization error: $e');
+    _logDebug('Stack trace: $stackTrace');
     // Show error to user
   }
 

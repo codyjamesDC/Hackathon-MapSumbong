@@ -4,6 +4,12 @@ import 'dart:async';
 import '../models/user.dart' as app_user;
 import '../services/auth_service.dart';
 
+void _logDebug(String message) {
+  if (kDebugMode) {
+    debugPrint(message);
+  }
+}
+
 class AuthProvider with ChangeNotifier {
   app_user.User? _user;
   bool _isLoading = false;
@@ -17,23 +23,23 @@ class AuthProvider with ChangeNotifier {
   bool get isAuthenticated => _user != null;
 
   AuthProvider() {
-    print('🔐 AuthProvider initializing...');
+    _logDebug('🔐 AuthProvider initializing...');
     _initializeAuth();
   }
 
   void _initializeAuth() {
-    print('🔐 Checking existing session...');
+    _logDebug('🔐 Checking existing session...');
     final currentUser = AuthService.getCurrentUser();
     if (currentUser != null) {
-      print('✓ Found existing user: ${currentUser.id}');
+      _logDebug('✓ Found existing user: ${currentUser.id}');
       _user = currentUser;
     } else {
-      print('ℹ No existing session found');
+      _logDebug('ℹ No existing session found');
     }
 
-    print('🔐 Setting up auth state listener...');
+    _logDebug('🔐 Setting up auth state listener...');
     _authStateSub = AuthService.onAuthStateChange().listen(_handleAuthStateChange);
-    print('✓ Auth provider initialized');
+    _logDebug('✓ Auth provider initialized');
   }
 
   void _handleAuthStateChange(supabase.AuthState event) {
