@@ -13,6 +13,8 @@ import 'screens/auth/otp_verification_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/reports/reports_list_screen.dart';
 import 'screens/reports/report_detail_screen.dart';
+import 'screens/reports/create_report_options_screen.dart';
+import 'screens/reports/manual_report_form_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'screens/map/map_screen.dart';
 import 'screens/location/location_picker_screen.dart';
@@ -115,6 +117,14 @@ GoRouter _buildRouter() {
       GoRoute(
         path: '/reports',
         builder: (context, state) => const ReportsListScreen(),
+      ),
+      GoRoute(
+        path: '/create-report',
+        builder: (context, state) => const CreateReportOptionsScreen(),
+      ),
+      GoRoute(
+        path: '/create-report/manual',
+        builder: (context, state) => const ManualReportFormScreen(),
       ),
       GoRoute(
         path: '/reports/:id',

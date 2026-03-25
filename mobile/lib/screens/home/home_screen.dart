@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:latlong2/latlong.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/messages_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../models/report.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/report_card.dart';
-import '../location/location_picker_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,31 +18,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   ReportsProvider? _reportsProvider;
 
-  Future<void> _startNewReport() async {
-    Provider.of<MessagesProvider>(context, listen: false).clearGpsCoordinates();
-
-    final LatLng? picked = await Navigator.of(context).push<LatLng>(
-      MaterialPageRoute(
-        builder: (_) => const LocationPickerScreen(),
-        fullscreenDialog: true,
-      ),
-    );
-
-    if (!mounted) return;
-
-    if (picked == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Pumili muna ng lokasyon bago magsimula ng report.'),
-        ),
-      );
-      return;
-    }
-
-    Provider.of<MessagesProvider>(context, listen: false)
-        .setGpsCoordinates(picked.latitude, picked.longitude);
-
-    context.push('/chat/new');
+  void _startNewReport() {
+    context.push('/create-report');
   }
 
   @override
