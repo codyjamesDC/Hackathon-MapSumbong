@@ -24,7 +24,7 @@ class SupabaseService {
         .select()
         .eq('id', reportId)
         .eq('is_deleted', false)
-        .single();
+        .maybeSingle();
 
     return response != null ? Report.fromJson(response) : null;
   }
@@ -55,7 +55,7 @@ class SupabaseService {
         .from('users')
         .select()
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
     return response != null ? app_user.User.fromJson(response) : null;
   }
