@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/messages_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../models/message.dart';
+import '../../models/report.dart';
 import '../../theme/app_theme.dart';
 import '../../services/storage_service.dart';
 
@@ -216,6 +217,16 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final msgs = Provider.of<MessagesProvider>(context);
+    final reports = Provider.of<ReportsProvider>(context);
+    Report? linkedReport;
+    if (!_isNewReport) {
+      for (final r in reports.reports) {
+        if (r.id == widget.reportId) {
+          linkedReport = r;
+          break;
+        }
+      }
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -267,6 +278,14 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           // ── New report hint banner ─────────────────────────────────────
           if (_isNewReport) const _HintBanner(),
+
+          _ReportContextCard(
+            reportId: widget.reportId,
+            linkedReport: linkedReport,
+            capturedLat: msgs.capturedLatitude,
+            capturedLng: msgs.capturedLongitude,
+            isNewReport: _isNewReport,
+          ),
 
           // ── Submit report bar ──────────────────────────────────────────
           if (msgs.hasCompletedReport)
@@ -1017,6 +1036,124 @@ class _ConnectionBanner extends StatelessWidget {
             ),
             child: const Text('Retry'),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReportContextCard extends StatelessWidget {
+  final String reportId;
+  final Report? linkedReport;
+  final double? capturedLat;
+  final double? capturedLng;
+  final bool isNewReport;
+
+  const _ReportContextCard({
+    required this.reportId,
+    required this.linkedReport,
+    required this.capturedLat,
+    required this.capturedLng,
+    required this.isNewReport,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = isNewReport
+        ? 'AI Report Session'
+        : linkedReport != null
+            ? linkedReport!.issueType.replaceAll('_', ' ').toUpperCase()
+            : 'Report $reportId';
+    final subtitle = isNewReport
+        ? 'Sagutin ang mga tanong para makumpleto ang report details.'
+        : linkedReport?.locationText?.isNotEmpty == true
+            ? linkedReport!.locationText!
+            : linkedReport?.barangay ?? 'Chat with authorities';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySurface,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  isNewReport ? Icons.auto_awesome_rounded : Icons.report_rounded,
+                  size: 16,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Nunito',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Nunito',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (!isNewReport)
+                TextButton(
+                  onPressed: () => context.push('/reports/$reportId'),
+                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                  child: const Text('Details'),
+                ),
+            ],
+          ),
+          if (capturedLat != null && capturedLng != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.pin_drop_outlined,
+                    size: 14, color: AppColors.accent),
+                const SizedBox(width: 6),
+                Text(
+                  'GPS ${capturedLat!.toStringAsFixed(5)}, '
+                  '${capturedLng!.toStringAsFixed(5)}',
+                  style: const TextStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.accent,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

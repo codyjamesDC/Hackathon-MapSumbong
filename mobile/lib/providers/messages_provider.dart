@@ -40,6 +40,8 @@ class MessagesProvider with ChangeNotifier {
   bool get hasConnectionIssue => _hasConnectionIssue;
   int get queuedMessageCount => _queuedMessages.length;
   bool get hasCompletedReport => _pendingReportData != null;
+  double? get capturedLatitude => _capturedLat;
+  double? get capturedLongitude => _capturedLng;
 
   MessagesProvider({
     SendMessageApi? sendMessageApi,

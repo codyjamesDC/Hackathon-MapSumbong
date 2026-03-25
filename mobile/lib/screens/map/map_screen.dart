@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../models/report.dart';
+import '../../theme/app_theme.dart';
 
 // Default center: Los Baños, Laguna, Philippines
 const _defaultCenter = LatLng(14.1698, 121.2430);
@@ -21,6 +22,22 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   final _mapController = MapController();
   Report? _selectedReport;
+  String _filter = 'all';
+
+  List<Report> _applyFilter(List<Report> source) {
+    switch (_filter) {
+      case 'active':
+        return source
+            .where((r) => r.status != 'resolved' && r.status != 'closed')
+            .toList();
+      case 'critical':
+        return source.where((r) => r.urgency == 'critical').toList();
+      case 'resolved':
+        return source.where((r) => r.status == 'resolved').toList();
+      default:
+        return source;
+    }
+  }
 
   @override
   void initState() {
@@ -40,9 +57,12 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     final reportsProvider = Provider.of<ReportsProvider>(context);
-    final reports = reportsProvider.reports
+    final allReports = reportsProvider.reports
         .where((r) => !r.isDeleted)
         .toList();
+    final reports = _applyFilter(allReports);
+    final selectedVisible =
+      _selectedReport != null && reports.any((r) => r.id == _selectedReport!.id);
 
     return Scaffold(
       appBar: AppBar(
@@ -111,8 +131,26 @@ class _MapScreenState extends State<MapScreen> {
             child: _MapLegend(),
           ),
 
+          Positioned(
+            top: 56,
+            left: 12,
+            right: 12,
+            child: _MapFilterBar(
+              selected: _filter,
+              onChanged: (value) {
+                setState(() {
+                  _filter = value;
+                  if (_selectedReport != null &&
+                      !reports.any((r) => r.id == _selectedReport!.id)) {
+                    _selectedReport = null;
+                  }
+                });
+              },
+            ),
+          ),
+
           // Selected report card
-          if (_selectedReport != null)
+          if (_selectedReport != null && selectedVisible)
             Positioned(
               bottom: 16,
               left: 16,
@@ -152,9 +190,34 @@ class _MapScreenState extends State<MapScreen> {
                   ],
                 ),
                 child: Text(
-                  '${reports.length} report${reports.length > 1 ? 's' : ''}',
+                  '${reports.length} sa mapa',
                   style: const TextStyle(
                       fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+
+          if (!reportsProvider.isLoading && reports.isEmpty)
+            Positioned(
+              bottom: 18,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Text(
+                  'Walang report na tugma sa filter na ito.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Nunito',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
             ),
@@ -393,4 +456,49 @@ class _ReportPopup extends StatelessWidget {
       .split('_')
       .map((w) => w[0].toUpperCase() + w.substring(1))
       .join(' ');
+}
+
+class _MapFilterBar extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  const _MapFilterBar({required this.selected, required this.onChanged});
+
+  static const _items = [
+    (id: 'all', label: 'Lahat'),
+    (id: 'active', label: 'Aktibo'),
+    (id: 'critical', label: 'Kritikal'),
+    (id: 'resolved', label: 'Nalutas'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _items.map((item) {
+          final active = item.id == selected;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(item.label),
+              selected: active,
+              onSelected: (_) => onChanged(item.id),
+              selectedColor: AppColors.primary.withOpacity(0.14),
+              backgroundColor: Colors.white,
+              side: BorderSide(
+                color: active ? AppColors.primary : AppColors.border,
+              ),
+              labelStyle: TextStyle(
+                fontFamily: 'Nunito',
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: active ? AppColors.primary : AppColors.textSecondary,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
 }
