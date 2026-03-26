@@ -182,7 +182,7 @@ class _ManualReportFormScreenState extends State<ManualReportFormScreen> {
             const SizedBox(height: AppSpacing.lg),
             _Label(text: 'Uri ng Isyu'),
             DropdownButtonFormField<String>(
-              value: _issueType,
+              initialValue: _issueType,
               items: _issueTypes
                   .map(
                     (it) => DropdownMenuItem<String>(
@@ -198,7 +198,7 @@ class _ManualReportFormScreenState extends State<ManualReportFormScreen> {
             const SizedBox(height: 12),
             _Label(text: 'Urgency'),
             DropdownButtonFormField<String>(
-              value: _urgency,
+              initialValue: _urgency,
               items: _urgencies
                   .map(
                     (it) => DropdownMenuItem<String>(

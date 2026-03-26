@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mapsumbong/models/user.dart';
 import 'package:mapsumbong/providers/auth_provider.dart';
 
 void main() {

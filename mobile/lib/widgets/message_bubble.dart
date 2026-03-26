@@ -84,14 +84,14 @@ class MessageBubble extends StatelessWidget {
                         width: 200,
                         height: 200,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
+                        placeholder: (_, _) => Container(
                           width: 200,
                           height: 200,
                           color: Colors.grey[300],
                           child: const Center(
                               child: CircularProgressIndicator()),
                         ),
-                        errorWidget: (_, __, ___) => Container(
+                        errorWidget: (_, _, _) => Container(
                           width: 200,
                           height: 200,
                           color: Colors.grey[300],

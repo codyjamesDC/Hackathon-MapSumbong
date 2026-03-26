@@ -177,7 +177,41 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             const SizedBox(height: 14),
 
             // Status banner
-            _StatusBanner(status: report.status),
+            _StatusBanner(
+              status: report.status,
+              isPendingProof: report.isResolutionPendingProof,
+            ),
+            if (report.isResolutionPendingProof) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.pending_actions_rounded,
+                        size: 18, color: Colors.amber),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Naka-resolve na ayon sa opisyal, pero hinihintay pa ang written report at photo evidence para ma-finalize ang case.',
+                        style: TextStyle(
+                          fontFamily: 'Nunito',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF7A5C00),
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
 
             // Issue type + urgency row
@@ -262,7 +296,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: report.imageUrls.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  separatorBuilder: (_, _) => const SizedBox(width: 12),
                   itemBuilder: (context, i) => ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: CachedNetworkImage(
@@ -270,14 +304,14 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                       width: 200,
                       height: 200,
                       fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
+                      placeholder: (_, _) => Container(
                         width: 200,
                         height: 200,
                         color: Colors.grey[200],
                         child: const Center(
                             child: CircularProgressIndicator()),
                       ),
-                      errorWidget: (_, __, ___) => Container(
+                      errorWidget: (_, _, _) => Container(
                         width: 200,
                         height: 200,
                         color: Colors.grey[200],
@@ -476,7 +510,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
 class _StatusBanner extends StatelessWidget {
   final String status;
-  const _StatusBanner({required this.status});
+  final bool isPendingProof;
+  const _StatusBanner({required this.status, this.isPendingProof = false});
 
   @override
   Widget build(BuildContext context) {
@@ -491,6 +526,11 @@ class _StatusBanner extends StatelessWidget {
           Colors.purple,
           'Repair Scheduled',
           Icons.calendar_today
+        ),
+      'resolved' when isPendingProof => (
+          Colors.amber,
+          'Resolved - pending proof',
+          Icons.pending_actions_rounded
         ),
       'resolved' => (Colors.green, 'Resolved ✓', Icons.check_circle),
       'reopened' => (Colors.red, 'Reopened — under review', Icons.refresh),

@@ -81,6 +81,7 @@ class ReportsProvider with ChangeNotifier {
     String reportId,
     String newStatus, {
     String? resolutionNote,
+    String? resolutionPhotoUrl,
     String? updatedBy,
   }) async {
     try {
@@ -88,15 +89,24 @@ class ReportsProvider with ChangeNotifier {
         reportId: reportId,
         status: newStatus,
         resolutionNote: resolutionNote,
+        resolutionPhotoUrl: resolutionPhotoUrl,
         updatedBy: updatedBy,
       );
 
       final index = _reports.indexWhere((r) => r.id == reportId);
       if (index != -1) {
-        _reports[index] = _reports[index].copyWith(status: newStatus);
+        _reports[index] = _reports[index].copyWith(
+          status: newStatus,
+          resolutionNote: resolutionNote,
+          resolutionPhotoUrl: resolutionPhotoUrl,
+        );
       }
       if (_selectedReport?.id == reportId) {
-        _selectedReport = _selectedReport!.copyWith(status: newStatus);
+        _selectedReport = _selectedReport!.copyWith(
+          status: newStatus,
+          resolutionNote: resolutionNote,
+          resolutionPhotoUrl: resolutionPhotoUrl,
+        );
       }
       notifyListeners();
     } catch (e) {

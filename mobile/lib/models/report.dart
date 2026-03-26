@@ -117,6 +117,12 @@ class Report {
   bool get isResolved => status == 'resolved';
   bool get isInProgress => status == 'in_progress';
   bool get isCritical => urgency == 'critical';
+    bool get hasResolutionNote => (resolutionNote ?? '').trim().isNotEmpty;
+    bool get hasResolutionPhotoEvidence =>
+      (resolutionPhotoUrl ?? '').trim().isNotEmpty;
+    bool get isFullyResolved =>
+      isResolved && hasResolutionNote && hasResolutionPhotoEvidence;
+    bool get isResolutionPendingProof => isResolved && !isFullyResolved;
 
   // ── Display helpers ───────────────────────────────────────────────────────
   String get urgencyLabel {
@@ -137,6 +143,9 @@ class Report {
       'resolved': 'Nalutas',
       'reopened': 'Muling Binuka',
     };
+    if (status == 'resolved' && isResolutionPendingProof) {
+      return 'Nalutas (pending proof)';
+    }
     return labels[status] ?? status;
   }
 

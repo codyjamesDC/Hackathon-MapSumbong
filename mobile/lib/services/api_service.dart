@@ -64,10 +64,10 @@ class ApiService {
             body: jsonEncode({
               'message': message,
               'reporter_id': reporterId,
-              if (photoUrl != null) 'photo_url': photoUrl,
-              if (sessionId != null) 'session_id': sessionId,
-              if (latitude != null) 'latitude': latitude,
-              if (longitude != null) 'longitude': longitude,
+              'photo_url': ?photoUrl,
+              'session_id': ?sessionId,
+              'latitude': ?latitude,
+              'longitude': ?longitude,
             }),
           )
           .timeout(
@@ -129,10 +129,10 @@ class ApiService {
     final queryParams = <String, String>{
       'limit': limit.toString(),
       'offset': offset.toString(),
-      if (status != null) 'status': status,
-      if (barangay != null) 'barangay': barangay,
-      if (urgency != null) 'urgency': urgency,
-      if (issueType != null) 'issue_type': issueType,
+      'status': ?status,
+      'barangay': ?barangay,
+      'urgency': ?urgency,
+      'issue_type': ?issueType,
     };
 
     final uri = Uri.parse('$baseUrl/reports')
@@ -178,10 +178,9 @@ class ApiService {
           headers: _headersJson(),
           body: jsonEncode({
             'status': status,
-            if (resolutionNote != null) 'resolution_note': resolutionNote,
-            if (resolutionPhotoUrl != null)
-              'resolution_photo_url': resolutionPhotoUrl,
-            if (updatedBy != null) 'updated_by': updatedBy,
+            'resolution_note': ?resolutionNote,
+            'resolution_photo_url': ?resolutionPhotoUrl,
+            'updated_by': ?updatedBy,
           }),
         )
         .timeout(_timeout);

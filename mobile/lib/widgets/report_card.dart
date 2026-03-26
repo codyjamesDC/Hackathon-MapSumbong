@@ -110,7 +110,37 @@ class ReportCard extends StatelessWidget {
                         ),
 
                         // Status badge
-                        StatusBadge(status: report.status, small: compact),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            StatusBadge(status: report.status, small: compact),
+                            if (report.isResolutionPendingProof) ...[
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withOpacity(0.15),
+                                  borderRadius:
+                                      BorderRadius.circular(AppRadius.full),
+                                  border: Border.all(
+                                    color: Colors.amber.withOpacity(0.35),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'pending proof',
+                                  style: TextStyle(
+                                    fontFamily: 'Nunito',
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF9A6B00),
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ],
                     ),
 

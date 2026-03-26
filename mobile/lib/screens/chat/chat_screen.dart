@@ -230,6 +230,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         elevation: 0,
@@ -552,12 +553,16 @@ class _ChatInputState extends State<_ChatInput> {
 
   @override
   Widget build(BuildContext context) {
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+
     return Container(
       padding: EdgeInsets.fromLTRB(
         12,
         10,
         12,
-        MediaQuery.of(context).padding.bottom + 10,
+        keyboardInset > 0
+            ? 10
+            : MediaQuery.of(context).padding.bottom + 10,
       ),
       decoration: BoxDecoration(
         color: AppColors.surface,

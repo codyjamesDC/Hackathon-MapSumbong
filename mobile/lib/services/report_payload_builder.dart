@@ -42,8 +42,8 @@ class ReportPayloadBuilder {
       'barangay': _string(extracted['barangay']) ?? 'unknown',
       'urgency': _string(extracted['urgency']) ?? 'medium',
       if (_string(extracted['sdg_tag']) != null) 'sdg_tag': _string(extracted['sdg_tag']),
-      if (lat != null) 'latitude': lat,
-      if (lng != null) 'longitude': lng,
+      'latitude': ?lat,
+      'longitude': ?lng,
       if (photoUrl != null && photoUrl.isNotEmpty) 'photo_url': photoUrl,
     };
   }
