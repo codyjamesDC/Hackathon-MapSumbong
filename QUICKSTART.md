@@ -9,8 +9,9 @@
 ### 1. Backend (Terminal 1)
 
 ```bash
-cd mapsumbong/backend
-cp .env.example .env
+cd backend
+# Windows: copy .env.example .env
+# macOS/Linux: cp .env.example .env
 # Edit .env with Supabase URL, Gemini API key, Telegram token (see docs/DEMO_SETUP_GUIDE.md Part 1.4)
 
 python -m venv venv
@@ -26,7 +27,7 @@ python main.py
 ### 2. Frontend (Terminal 2)
 
 ```bash
-cd mapsumbong/mobile  # or mapsumbong/frontend
+cd mobile  # or frontend
 flutter pub get
 flutter run -d emulator
 # ✅ App running on emulator
@@ -47,13 +48,13 @@ Verify: Bot responds with AI analysis + report ID
 
 | Component | What's New | File |
 |-----------|-----------|------|
-| **Backend** | Environment validation at startup | [config/environment.py](mapsumbong/backend/config/environment.py) |
-| **Backend** | Structured logging system | [config/logging.py](mapsumbong/backend/config/logging.py) |
-| **Backend** | Telegram webhook signature verification | [routes/telegram.py](mapsumbong/backend/routes/telegram.py) |
-| **Documentation** | Complete demo setup walkthrough | [docs/DEMO_SETUP_GUIDE.md](mapsumbong/backend/docs/DEMO_SETUP_GUIDE.md) |
-| **Documentation** | SMS integration design & implementation | [docs/SMS_INTEGRATION_GUIDE.md](mapsumbong/backend/docs/SMS_INTEGRATION_GUIDE.md) |
-| **Tests** | 70 passing tests (unit + widget + integration) | [test/](mapsumbong/mobile/test/), [integration_test/](mapsumbong/mobile/integration_test/) |
-| **CI/CD** | GitHub Actions workflow | [.github/workflows/flutter_test.yml](mapsumbong/mobile/.github/workflows/flutter_test.yml) |
+| **Backend** | Environment validation at startup | [config/environment.py](backend/config/environment.py) |
+| **Backend** | Structured logging system | [config/logging.py](backend/config/logging.py) |
+| **Backend** | Telegram webhook signature verification | [routes/telegram.py](backend/routes/telegram.py) |
+| **Documentation** | Complete demo setup walkthrough | [docs/DEMO_SETUP_GUIDE.md](backend/docs/DEMO_SETUP_GUIDE.md) |
+| **Documentation** | SMS integration design & implementation | [docs/SMS_INTEGRATION_GUIDE.md](backend/docs/SMS_INTEGRATION_GUIDE.md) |
+| **Tests** | 70 passing tests (unit + widget + integration) | [test/](mobile/test/), [integration_test/](mobile/integration_test/) |
+| **CI/CD** | GitHub Actions workflow | [.github/workflows/flutter_test.yml](mobile/.github/workflows/flutter_test.yml) |
 
 ---
 
@@ -95,7 +96,7 @@ python main.py
 ### Mobile Tests Pass?
 
 ```bash
-cd mapsumbong/mobile
+cd mobile
 flutter test
 # Expected: 70/70 tests passing, 0 errors
 ```
@@ -147,13 +148,13 @@ curl -X POST http://localhost:8000/telegram/webhook \
 
 ```bash
 # Terminal 1 (live logs)
-tail -f mapsumbong/backend/logs/mapsumbong_*.log
+tail -f backend/logs/mapsumbong_*.log
 
 # Terminal 2 (view entire log)
-cat mapsumbong/backend/logs/mapsumbong_20240115.log
+cat backend/logs/mapsumbong_20240115.log
 
 # Search logs
-grep "Report created" mapsumbong/backend/logs/mapsumbong_*.log
+grep "Report created" backend/logs/mapsumbong_*.log
 ```
 
 ### Example Log Output
@@ -251,7 +252,7 @@ python -c "from config.environment import EnvironmentValidator; EnvironmentValid
 ## Next Steps
 
 ### For Demo (Today/Tomorrow)
-1. Follow [docs/DEMO_SETUP_GUIDE.md](mapsumbong/backend/docs/DEMO_SETUP_GUIDE.md)
+1. Follow [docs/DEMO_SETUP_GUIDE.md](backend/docs/DEMO_SETUP_GUIDE.md)
 2. Run backend + mobile + Telegram bot
 3. Follow Part 6 demo narrative (5-10 min script)
 4. Show audience mobile app + Telegram fallback
