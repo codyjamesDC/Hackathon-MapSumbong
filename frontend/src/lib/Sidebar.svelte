@@ -86,6 +86,50 @@
     showResolveModal = true;
   }
 
+  async function markResolved(inc, e) {
+    if (e?.stopPropagation) e.stopPropagation();
+    if (!inc || isSavingResolution || isResolutionComplete(inc)) return;
+
+    isSavingResolution = true;
+    try {
+      const updated = await resolveIncident(inc.id);
+
+      const fallbackResolved = {
+        ...inc,
+        resolved: true,
+        resolutionNote: hasText(inc?.resolutionNote) ? inc.resolutionNote.trim() : '',
+        resolutionPhotoUrl: hasText(inc?.resolutionPhotoUrl)
+          ? inc.resolutionPhotoUrl.trim()
+          : '',
+      };
+      const fallbackComplete =
+        hasText(fallbackResolved.resolutionNote) &&
+        hasText(fallbackResolved.resolutionPhotoUrl);
+      fallbackResolved.resolutionComplete = fallbackComplete;
+      fallbackResolved.resolutionPendingProof = !fallbackComplete;
+
+      const merged = updated || fallbackResolved;
+
+      incidents.update((list) =>
+        list.map((i) => (i.id === inc.id ? { ...i, ...merged } : i))
+      );
+
+      if ($selectedIncident?.id === inc.id) {
+        selectedIncident.set({ ...$selectedIncident, ...merged });
+      }
+
+      if (merged.resolutionPendingProof) {
+        toastMsg.set('Marked as resolved. Pending written report and photo evidence.');
+      } else {
+        toastMsg.set('Resolved and fully completed with written report + evidence.');
+      }
+    } catch (err) {
+      toastMsg.set(err?.message || 'Failed to update report status.');
+    } finally {
+      isSavingResolution = false;
+    }
+  }
+
   function closeResolveModal() {
     if (isSavingResolution) return;
     showResolveModal = false;
@@ -249,9 +293,16 @@
                   ? 'Already fully completed'
                   : isResolutionPendingProof(inc)
                     ? 'Add written report and evidence'
-                    : 'Mark resolved'
+                    : 'Mark resolved now'
               }
-              on:click={(e)=>!isResolutionComplete(inc)&&openResolveModal(inc,e)}
+              on:click={(e) => {
+                if (isResolutionComplete(inc)) return;
+                if (isResolutionPendingProof(inc)) {
+                  openResolveModal(inc, e);
+                  return;
+                }
+                markResolved(inc, e);
+              }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
             </button>

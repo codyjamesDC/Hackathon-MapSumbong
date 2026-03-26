@@ -70,6 +70,45 @@
     showResolveModal = false;
   }
 
+  async function markResolved() {
+    if (!inc || isSavingResolution) return;
+    isSavingResolution = true;
+
+    try {
+      const updated = await resolveIncident(inc.id);
+
+      const fallback = {
+        ...inc,
+        resolved: true,
+        resolutionNote: hasText(inc?.resolutionNote) ? inc.resolutionNote.trim() : '',
+        resolutionPhotoUrl: hasText(inc?.resolutionPhotoUrl)
+          ? inc.resolutionPhotoUrl.trim()
+          : '',
+      };
+      const fallbackComplete =
+        hasText(fallback.resolutionNote) && hasText(fallback.resolutionPhotoUrl);
+      fallback.resolutionComplete = fallbackComplete;
+      fallback.resolutionPendingProof = !fallbackComplete;
+
+      const merged = updated || fallback;
+
+      incidents.update((list) =>
+        list.map((i) => (i.id === inc.id ? { ...i, ...merged } : i))
+      );
+      selectedIncident.set({ ...inc, ...merged });
+
+      if (merged.resolutionPendingProof) {
+        toastMsg.set('Resolved status saved. Pending written report and photo evidence.');
+      } else {
+        toastMsg.set('Resolved and fully completed with written report + evidence.');
+      }
+    } catch (err) {
+      toastMsg.set(err?.message || 'Failed to update report status.');
+    } finally {
+      isSavingResolution = false;
+    }
+  }
+
   async function saveResolution() {
     if (!inc || isSavingResolution) return;
     isSavingResolution = true;
@@ -211,10 +250,15 @@
     </div>
 
     <div class="card-footer">
-      {#if !inc.resolved || isPendingProof}
-        <button class="resolve-btn" class:pending={isPendingProof} on:click={openResolveModal}>
+      {#if !inc.resolved}
+        <button class="resolve-btn" on:click={markResolved}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-          {isPendingProof ? 'Add Proof to Complete' : 'Mark as Resolved'}
+          Mark as Resolved
+        </button>
+      {:else if isPendingProof}
+        <button class="resolve-btn pending" on:click={openResolveModal}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+          Add Proof to Complete
         </button>
       {:else}
         <div class="resolved-row">
