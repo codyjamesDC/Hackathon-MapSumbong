@@ -413,7 +413,7 @@
   .action-box { font-size: 12px; color: #c0c0d0; line-height: 1.6; padding: 7px 10px; background: rgba(255,255,255,0.04); border-radius: 8px; }
   .auth-row { display: flex; flex-wrap: wrap; gap: 4px; }
   .auth-tag { font-size: 11px; padding: 3px 9px; border-radius: 6px; background: rgba(124,134,255,0.1); color: #7c86ff; }
-  .coords { font-size: 11px; color: #505060; font-family: monospace; background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 6px; }
+  .coords { font-size: 11px; color: #c0c0d0; font-family: monospace; background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 6px; }
   .status-note {
     font-size: 11px;
     color: #00c896;
