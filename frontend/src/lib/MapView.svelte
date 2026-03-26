@@ -26,6 +26,13 @@
     low: '#00c896'
   };
 
+  const SEV_HEIGHTS = {
+    critical: 2200,
+    high: 1600,
+    medium: 1100,
+    low: 750
+  };
+
   // Calculate color based on incident count and severity
   function getBarangayColor(barangay, incidentList) {
     const barangayIncidents = incidentList.filter(inc => inc.barangay === barangay && !inc.resolved);
@@ -43,6 +50,22 @@
     // Adjust opacity based on incident count
     const severityColor = SEV_COLORS[highestSeverity];
     return severityColor;
+  }
+
+  function getBarangayHeight(barangay, incidentList) {
+    const barangayIncidents = incidentList.filter(inc => inc.barangay === barangay && !inc.resolved);
+
+    if (barangayIncidents.length === 0) return 120;
+
+    let highestSeverity = 'low';
+    barangayIncidents.forEach(inc => {
+      if (ORDER[inc.severity] < ORDER[highestSeverity]) {
+        highestSeverity = inc.severity;
+      }
+    });
+
+    // Taller extrusions indicate both severity and number of active incidents.
+    return SEV_HEIGHTS[highestSeverity] + barangayIncidents.length * 180;
   }
 
   // Update barangay statistics
@@ -73,24 +96,30 @@
     });
 
     // Update choropleth layer colors
-    if (map && map.getLayer('barangays-fill')) {
+    if (map && map.getLayer('barangays-extrusion')) {
       updateChoropleth();
     }
   }
 
   function updateChoropleth() {
-    if (!map || !map.getLayer('barangays-fill')) return;
+    if (!map || !map.getLayer('barangays-extrusion')) return;
 
     const fillColorExpr = ['case'];
+    const extrusionHeightExpr = ['case'];
     barangayGeoJSON.features.forEach(feature => {
       const barangay = feature.properties.name;
       const color = getBarangayColor(barangay, $incidents);
+      const height = getBarangayHeight(barangay, $incidents);
       fillColorExpr.push(['==', ['get', 'name'], barangay]);
       fillColorExpr.push(color);
+      extrusionHeightExpr.push(['==', ['get', 'name'], barangay]);
+      extrusionHeightExpr.push(height);
     });
     fillColorExpr.push('#1a1a2e'); // default
+    extrusionHeightExpr.push(120); // default
 
-    map.setPaintProperty('barangays-fill', 'fill-color', fillColorExpr);
+    map.setPaintProperty('barangays-extrusion', 'fill-extrusion-color', fillColorExpr);
+    map.setPaintProperty('barangays-extrusion', 'fill-extrusion-height', extrusionHeightExpr);
   }
 
   function onBarangayClick(e) {
@@ -122,7 +151,7 @@
         popup.remove();
       }
 
-      popup = new maplibregl.Popup({ offset: 25 })
+      popup = new maplibregl.Popup({ offset: 35 })
         .setLngLat(coordinates)
         .setHTML(html)
         .addTo(map);
@@ -152,9 +181,9 @@
         ]
       },
       center: LOS_BANOS_CENTER,
-      zoom: 14,
-      pitch: 0,
-      bearing: 0
+      zoom: 13.7,
+      pitch: 58,
+      bearing: -18
     });
 
     // Add dark filter to tiles
@@ -172,14 +201,16 @@
         data: barangayGeoJSON
       });
 
-      // Add fill layer
+      // Add 3D extrusion layer
       map.addLayer({
-        id: 'barangays-fill',
-        type: 'fill',
+        id: 'barangays-extrusion',
+        type: 'fill-extrusion',
         source: 'barangays',
         paint: {
-          'fill-color': '#1a472a',
-          'fill-opacity': 0.6
+          'fill-extrusion-color': '#1a472a',
+          'fill-extrusion-height': 120,
+          'fill-extrusion-base': 0,
+          'fill-extrusion-opacity': 0.78
         }
       });
 
@@ -190,17 +221,17 @@
         source: 'barangays',
         paint: {
           'line-color': '#fff',
-          'line-width': 2,
-          'line-opacity': 0.8
+          'line-width': 1.2,
+          'line-opacity': 0.35
         }
       });
 
-      // Make fill layer interactive
-      map.on('click', 'barangays-fill', onBarangayClick);
-      map.on('mouseenter', 'barangays-fill', () => {
+      // Make extrusion layer interactive
+      map.on('click', 'barangays-extrusion', onBarangayClick);
+      map.on('mouseenter', 'barangays-extrusion', () => {
         map.getCanvas().style.cursor = 'pointer';
       });
-      map.on('mouseleave', 'barangays-fill', () => {
+      map.on('mouseleave', 'barangays-extrusion', () => {
         map.getCanvas().style.cursor = '';
       });
 
@@ -225,6 +256,8 @@
           map.flyTo({
             center: [inc.lng, inc.lat],
             zoom: 16,
+            pitch: 60,
+            bearing: -20,
             duration: 900,
             easing: (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t
           });
