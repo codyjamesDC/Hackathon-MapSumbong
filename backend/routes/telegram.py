@@ -3,10 +3,15 @@ import httpx
 import os
 import tempfile
 import hmac
+import uuid
+from collections import defaultdict, deque
+from supabase import create_client
 
 from services.whisper_service import transcribe_audio
 from services.gemini_service import process_message as process_with_gemini
 from config.logging import get_logger
+from utils.geocoding import get_coordinates, reverse_geocode_barangay
+from utils.los_banos_data import LOS_BANOS_CENTER
 
 logger = get_logger(__name__)
 
@@ -14,6 +19,188 @@ router = APIRouter()
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_API_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+
+# Keep lightweight per-chat context to avoid repetitive follow-up questions.
+_CHAT_HISTORY: dict[int, deque[str]] = defaultdict(lambda: deque(maxlen=8))
+_CHAT_ACK_SENT: dict[int, bool] = defaultdict(bool)
+_CHAT_REPORT_ID: dict[int, str] = {}
+
+_ALLOWED_ISSUE_TYPES = {
+    'flood', 'waste', 'road_hazard', 'road', 'power_outage', 'power',
+    'water_supply', 'water', 'medical', 'emergency', 'fire', 'crime',
+    'landslide', 'earthquake_damage', 'other',
+}
+_ALLOWED_URGENCY = {'critical', 'high', 'medium', 'low'}
+
+
+def _get_supabase_client():
+    url = os.getenv('SUPABASE_URL')
+    key = os.getenv('SUPABASE_SERVICE_KEY') or os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    if not url or not key:
+        raise ValueError('Supabase credentials missing for Telegram report persistence')
+    return create_client(url, key)
+
+
+def _normalize_issue_type(value: str | None) -> str:
+    raw = str(value or '').strip().lower().replace(' ', '_').replace('-', '_')
+    aliases = {
+        'pothole': 'road_hazard',
+        'fallen_tree': 'road_hazard',
+        'obstruction': 'road_hazard',
+        'brownout': 'power_outage',
+        'blackout': 'power_outage',
+        'roadhazard': 'road_hazard',
+    }
+    normalized = aliases.get(raw, raw)
+    if normalized in _ALLOWED_ISSUE_TYPES:
+        return normalized
+    return 'other'
+
+
+def _normalize_urgency(value: str | None) -> str:
+    raw = str(value or '').strip().lower()
+    if raw in _ALLOWED_URGENCY:
+        return raw
+    return 'medium'
+
+
+def _extract_location_from_history(chat_id: int) -> str:
+    lines = list(_CHAT_HISTORY.get(chat_id, []))
+    resident_lines = [line for line in lines if line.startswith('Resident:')]
+    for line in reversed(resident_lines):
+        text = line.replace('Resident:', '', 1).strip()
+        if any(token in text.lower() for token in (' sa ', ' near ', ' tapat ', ' gate ', ' park ', ' barangay ')):
+            return text
+    return resident_lines[-1].replace('Resident:', '', 1).strip() if resident_lines else ''
+
+
+def _extract_barangay_hint(location_text: str) -> str:
+    text = (location_text or '').lower()
+    known = [
+        'anos', 'bagong silang', 'bambang', 'batong malake', 'baybayin', 'bayog',
+        'lalakay', 'maahas', 'malinta', 'mayondon', 'putho-tuntungin',
+        'san antonio', 'tadlac', 'timugan',
+    ]
+    for name in known:
+        if name in text:
+            return name.title()
+    return ''
+
+
+async def _persist_telegram_report(chat_id: int, user_message: str, extracted_data: dict) -> str | None:
+    issue_type = _normalize_issue_type(extracted_data.get('issue_type'))
+    if issue_type == 'other':
+        return None
+
+    location_text = str(extracted_data.get('location_text') or '').strip()
+    if not location_text:
+        location_text = _extract_location_from_history(chat_id)
+    if not location_text:
+        return None
+
+    description = str(extracted_data.get('description') or '').strip()
+    if not description:
+        description = user_message.strip() or 'Incident reported via Telegram'
+
+    barangay = str(extracted_data.get('barangay') or '').strip()
+    barangay_hint = _extract_barangay_hint(location_text)
+    if not barangay and barangay_hint:
+        barangay = barangay_hint
+
+    lat = extracted_data.get('latitude')
+    lng = extracted_data.get('longitude')
+    if lat is None or lng is None:
+        try:
+            coords = await get_coordinates(location_text, barangay or 'Batong Malake')
+            lat = coords.get('lat')
+            lng = coords.get('lng')
+        except Exception:
+            lat = None
+            lng = None
+
+    if lat is None or lng is None:
+        lat = float(LOS_BANOS_CENTER['lat'])
+        lng = float(LOS_BANOS_CENTER['lng'])
+
+    if not barangay:
+        try:
+            barangay = reverse_geocode_barangay(float(lat), float(lng))
+        except Exception:
+            barangay = ''
+    if not barangay or barangay == 'Unknown':
+        barangay = 'Batong Malake'
+
+    reporter_id = os.getenv('TELEGRAM_DEFAULT_REPORTER_ANON_ID', 'ANON-DEV01').strip() or 'ANON-DEV01'
+    supabase = _get_supabase_client()
+
+    existing = (
+        supabase.table('users')
+        .select('anonymous_id')
+        .eq('anonymous_id', reporter_id)
+        .limit(1)
+        .execute()
+    )
+    if not existing.data:
+        supabase.table('users').insert({
+            'anonymous_id': reporter_id,
+            'account_type': 'resident',
+            'display_name': f'Telegram {chat_id}',
+            'is_anonymous': True,
+            'barangay': barangay,
+        }).execute()
+
+    report_id = f'RPT-{uuid.uuid4().hex[:8].upper()}'
+    report = {
+        'id': report_id,
+        'reporter_anonymous_id': reporter_id,
+        'issue_type': issue_type,
+        'description': description,
+        'latitude': float(lat),
+        'longitude': float(lng),
+        'location_text': location_text,
+        'urgency': _normalize_urgency(extracted_data.get('urgency')),
+        'sdg_tag': extracted_data.get('sdg_tag'),
+        'status': 'received',
+        'barangay': barangay,
+        'photo_url': None,
+    }
+
+    supabase.table('reports').insert(report).execute()
+    return report_id
+
+
+def _is_reset_intent(user_message: str) -> bool:
+    text = (user_message or '').strip().lower()
+    return text in {
+        '/start',
+        '/reset',
+        'start',
+        'reset',
+        'new report',
+        'bagong report',
+    }
+
+
+def _append_chat_turn(chat_id: int, role: str, text: str):
+    clean = str(text or '').strip().replace('\n', ' ')
+    if not clean:
+        return
+    _CHAT_HISTORY[chat_id].append(f'{role}: {clean[:280]}')
+
+
+def _build_contextual_input(chat_id: int, user_message: str) -> str:
+    history = list(_CHAT_HISTORY.get(chat_id, []))
+    if not history:
+        return user_message
+
+    context_text = '\n'.join(history)
+    return (
+        'Conversation context (latest turns):\n'
+        f'{context_text}\n\n'
+        f'Current resident message: {user_message}\n'
+        'Continue the same report intake conversation. '
+        'Avoid asking again for details already provided unless clarification is truly needed.'
+    )
 
 
 def _is_valid_report_id(report_id: str | None) -> bool:
@@ -155,25 +342,47 @@ async def telegram_webhook(request: Request):
             logger.debug(f'Text message: {user_message[:50]}...')
 
             try:
+                if _is_reset_intent(user_message):
+                    _CHAT_HISTORY.pop(chat_id, None)
+                    _CHAT_ACK_SENT[chat_id] = False
+                    _CHAT_REPORT_ID.pop(chat_id, None)
+
+                _append_chat_turn(chat_id, 'Resident', user_message)
+
                 # Process with Gemini
-                result = await process_with_gemini(user_message)
+                contextual_input = _build_contextual_input(chat_id, user_message)
+                result = await process_with_gemini(contextual_input)
                 extracted_data = result.get('extracted_data') or {}
                 is_report_intent = _looks_like_report_intent(user_message, extracted_data)
 
                 # Send response
                 await send_telegram_message(chat_id, result['chatbot_response'])
+                _append_chat_turn(chat_id, 'Assistant', result.get('chatbot_response', ''))
 
                 if result['success'] and is_report_intent:
                     # Only send a report ID if one was actually generated.
-                    report_id = result.get('report_id')
+                    report_id = _CHAT_REPORT_ID.get(chat_id) or result.get('report_id')
+                    if not _is_valid_report_id(report_id):
+                        try:
+                            persisted_id = await _persist_telegram_report(chat_id, user_message, extracted_data)
+                            if _is_valid_report_id(persisted_id):
+                                report_id = persisted_id
+                                _CHAT_REPORT_ID[chat_id] = persisted_id
+                        except Exception as persist_error:
+                            logger.error(f'Failed to persist Telegram report for chat_id={chat_id}: {persist_error}')
+
                     if _is_valid_report_id(report_id):
                         logger.info(f'Report created via Telegram: report_id={report_id}, chat_id={chat_id}')
+                        _CHAT_ACK_SENT[chat_id] = False
+                        _CHAT_HISTORY.pop(chat_id, None)
+                        _CHAT_REPORT_ID.pop(chat_id, None)
                         await send_telegram_message(
                             chat_id,
                             f"✅ Report ID: {report_id}\n\nSalamat sa pag-report!"
                         )
-                    else:
+                    elif not _CHAT_ACK_SENT[chat_id]:
                         logger.info(f'Telegram message processed without report ID: chat_id={chat_id}')
+                        _CHAT_ACK_SENT[chat_id] = True
                         await send_telegram_message(
                             chat_id,
                             '✅ Natanggap ko ang report mo. Kukuha pa ako ng ilang detalye bago mag-generate ng Report ID.'

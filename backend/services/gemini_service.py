@@ -16,6 +16,110 @@ _client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
 _MODEL = 'gemini-2.5-flash'
 
 
+def _extract_current_message_for_fallback(user_message: str) -> str:
+    text = str(user_message or '').strip()
+    marker = 'Current resident message:'
+    if marker not in text:
+        return text
+
+    tail = text.split(marker, 1)[1].strip()
+    if '\n' in tail:
+        tail = tail.split('\n', 1)[0].strip()
+    return tail or text
+
+
+def _fallback_issue_type(user_message: str) -> str:
+    text = (user_message or '').lower()
+    if any(k in text for k in ('natumbang puno', 'tumba na puno', 'fallen tree', 'obstruction', 'blocked road', 'naharang')):
+        return 'road_hazard'
+    if any(k in text for k in ('pothole', 'lubak', 'butas', 'road')):
+        return 'road_hazard'
+    if any(k in text for k in ('flood', 'baha')):
+        return 'flood'
+    if any(k in text for k in ('sunog', 'fire')):
+        return 'fire'
+    if any(k in text for k in ('crime', 'nakaw', 'holdap')):
+        return 'crime'
+    if any(k in text for k in ('walang kuryente', 'brownout', 'blackout', 'power')):
+        return 'power_outage'
+    if any(k in text for k in ('tubig', 'water')):
+        return 'water_supply'
+    return 'other'
+
+
+def _has_location_hint(user_message: str) -> bool:
+    text = (user_message or '').lower()
+    location_tokens = (
+        'sa ', 'near ', 'tapat', 'gate', 'street', 'kanto',
+        'batong malake', 'anos', 'bayog', 'maahas', 'mayondon', 'uplb',
+    )
+    return any(token in text for token in location_tokens)
+
+
+def _fallback_urgency(user_message: str) -> str:
+    text = (user_message or '').lower()
+    low_indicators = (
+        'hindi malala', 'di malala', 'minor', 'abala lang', 'walang nasaktan', 'no injury',
+    )
+    critical_indicators = (
+        'critical', 'emergency', 'may nasaktan', 'injured', 'unconscious', 'sunog', 'fire',
+        'landslide', 'gumuguho',
+    )
+    high_indicators = (
+        'malaki', 'malalim', 'delikado', 'hazard', 'aksidente', 'accident', 'baha', 'flood',
+    )
+
+    if any(token in text for token in low_indicators):
+        return 'low'
+    if any(token in text for token in critical_indicators):
+        return 'critical'
+    if any(token in text for token in high_indicators):
+        return 'high'
+    return 'medium'
+
+
+def _has_impact_hint(user_message: str) -> bool:
+    text = (user_message or '').lower()
+    impact_tokens = (
+        'nasaktan', 'walang nasaktan', 'abala', 'delikado', 'malaki', 'malalim',
+        'harang', 'blocked', 'trapik', 'traffic',
+    )
+    return any(token in text for token in impact_tokens)
+
+
+def _fallback_chatbot_response(user_message: str) -> str:
+    current_text = _extract_current_message_for_fallback(user_message)
+    text = current_text.lower()
+    context_text = (user_message or '').strip().lower()
+    if text in {'hi', 'hello', 'hey', 'kumusta', 'kamusta', '/start'}:
+        return 'Hello po! Ano pong isyu ang gusto ninyong i-report at saan po ito nangyari?'
+
+    issue_type = _fallback_issue_type(context_text)
+    if issue_type == 'other':
+        return (
+            'Salamat po sa mensahe. Pakisabi po ang eksaktong problema '
+            '(hal. baha, pothole, sunog) at eksaktong lokasyon para maihanda ko ang report.'
+        )
+
+    has_location = _has_location_hint(context_text)
+    if not has_location:
+        return (
+            'Salamat sa pag-uulat. Para makumpleto ang report, '
+            'saan po eksakto ang lokasyon (barangay/landmark/kalsada)?'
+        )
+
+    if not _has_impact_hint(context_text):
+        return (
+            'Noted po ang issue at lokasyon. Para mas mabilis ang validation, '
+            'may landmark o picture po ba kayo? (optional)'
+        )
+
+    return (
+        'Salamat po. Na-log ko na ang detalye at ia-assess ng system ang urgency. '
+        'Magbibigay ako ng update kapag handa na ang report summary.'
+    )
+
+
 async def process_message(
     user_message: str,
     photo_url: Optional[str] = None,
@@ -90,11 +194,32 @@ async def process_message(
 
     except Exception as e:
         print(f'Gemini API error: {e}')
+        error_text = str(e)
+        lower_error = error_text.lower()
+        quota_exhausted = (
+            'resource_exhausted' in lower_error
+            or 'quota' in lower_error
+            or '429' in lower_error
+        )
+
+        fallback_issue_type = _fallback_issue_type(user_message)
+        fallback_urgency = _fallback_urgency(user_message)
+        fallback_reply = _fallback_chatbot_response(user_message)
+
+        if quota_exhausted:
+            fallback_reply = (
+                'Medyo mataas ang system traffic ngayon, pero tuloy ang intake.\n\n'
+                f'{fallback_reply}'
+            )
+
         return {
-            'extracted_data': {},
-            'chatbot_response': (
-                'Pasensya na, may technical issue sa sistema. Subukan ulit.'
-            ),
-            'success': False,
+            'extracted_data': {
+                'issue_type': fallback_issue_type,
+                'urgency': fallback_urgency,
+                'is_spam': False,
+                'confidence': 0.35,
+            },
+            'chatbot_response': fallback_reply,
+            'success': quota_exhausted,
             'error': str(e),
         }

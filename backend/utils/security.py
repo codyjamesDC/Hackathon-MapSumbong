@@ -92,6 +92,7 @@ def build_rate_limit_middleware():
         '/transcribe',
         '/session',
         '/telegram',
+        '/sms',
     )
     exempt_exact = {'/', '/health'}
     exempt_prefixes = ('/docs', '/redoc', '/openapi.json')

@@ -22,7 +22,7 @@ from prompts import (
     get_extraction_system_prompt,
     build_extraction_prompt,
 )
-from routes import reports, telegram
+from routes import reports, sms, telegram
 from utils.security import build_rate_limit_middleware, require_roles
 from utils.geocoding import reverse_geocode_barangay
 from utils.los_banos_data import LOS_BANOS_CENTER
@@ -144,6 +144,7 @@ app.middleware('http')(build_rate_limit_middleware())
 
 app.include_router(reports.router, tags=['reports'])
 app.include_router(telegram.router, prefix='/telegram', tags=['telegram'])
+app.include_router(sms.router, prefix='/sms', tags=['sms'])
 
 
 # ── Health checks ──────────────────────────────────────────────────────────────

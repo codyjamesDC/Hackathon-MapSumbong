@@ -22,9 +22,23 @@ class EnvironmentValidator:
     }
     
     # Required for SMS integration (MVP: optional)
-    SMS_VARS = {
-        'SMS_GATEWAY_URL': 'SMS gateway service URL (Twilio, Plivo, etc.)',
-        'SMS_GATEWAY_KEY': 'API key for SMS gateway',
+    SMS_GENERIC_VARS = {
+        'SMS_GATEWAY_URL': 'SMS gateway endpoint URL for generic provider mode',
+        'SMS_GATEWAY_KEY': 'API key for generic SMS gateway mode',
+    }
+
+    SMS_TWILIO_VARS = {
+        'SMS_API_KEY': 'Twilio Account SID',
+        'SMS_API_SECRET': 'Twilio Auth Token',
+        'SMS_FROM_NUMBER': 'Twilio sender phone number',
+    }
+
+    SMS_STARTUP_VARS = {
+        'SMS_API_KEY': 'Startup SMS provider API key',
+    }
+
+    SMS_PHILSMS_VARS = {
+        'SMS_API_KEY': 'PhilSMS API key token',
     }
     
     # Recommended security settings
@@ -78,11 +92,38 @@ class EnvironmentValidator:
             results['telegram'].append(f'⚠ Disabled (missing: {", ".join(missing)})')
         
         # SMS
-        sms_ready = all(os.getenv(var) for var in EnvironmentValidator.SMS_VARS)
-        if sms_ready:
-            results['sms'].append('✓ Enabled (residents can report via SMS)')
+        sms_provider = (os.getenv('SMS_PROVIDER', '') or '').strip().lower()
+        if not sms_provider:
+            results['sms'].append('⚠ Disabled (set SMS_PROVIDER to philsms, startup, twilio, or generic)')
+        elif sms_provider == 'philsms':
+            missing = [v for v in EnvironmentValidator.SMS_PHILSMS_VARS if not os.getenv(v)]
+            sender_id = os.getenv('SMS_SENDER_ID') or os.getenv('SMS_SYSTEM_NUMBER') or os.getenv('SMS_FROM_NUMBER')
+            if missing:
+                results['sms'].append(f'⚠ Disabled (PhilSMS missing: {", ".join(missing)})')
+            elif not sender_id:
+                results['sms'].append('⚠ Disabled (PhilSMS requires SMS_SENDER_ID or SMS_SYSTEM_NUMBER)')
+            else:
+                results['sms'].append('✓ Enabled (PhilSMS provider configured)')
+        elif sms_provider == 'startup':
+            missing = [v for v in EnvironmentValidator.SMS_STARTUP_VARS if not os.getenv(v)]
+            if missing:
+                results['sms'].append(f'⚠ Disabled (startup missing: {", ".join(missing)})')
+            else:
+                results['sms'].append('✓ Enabled (startup provider configured)')
+        elif sms_provider == 'twilio':
+            missing = [v for v in EnvironmentValidator.SMS_TWILIO_VARS if not os.getenv(v)]
+            if not missing:
+                results['sms'].append('✓ Enabled (Twilio provider configured)')
+            else:
+                results['sms'].append(f'⚠ Disabled (Twilio missing: {", ".join(missing)})')
+        elif sms_provider == 'generic':
+            missing = [v for v in EnvironmentValidator.SMS_GENERIC_VARS if not os.getenv(v)]
+            if not missing:
+                results['sms'].append('✓ Enabled (generic SMS gateway configured)')
+            else:
+                results['sms'].append(f'⚠ Disabled (generic missing: {", ".join(missing)})')
         else:
-            results['sms'].append('⚠ Disabled (SMS access not configured)')
+            results['sms'].append(f'⚠ Disabled (unknown SMS_PROVIDER: {sms_provider})')
         
         # Security
         security_warnings = []
@@ -134,7 +175,31 @@ class EnvironmentValidator:
         print(f"  Supabase URL: {os.getenv('SUPABASE_URL', '❌ not set')[:50]}...")
         print(f"  Gemini: {'✓ configured' if os.getenv('GEMINI_API_KEY') else '❌ not set'}")
         print(f"  Telegram: {'✓ configured' if os.getenv('TELEGRAM_BOT_TOKEN') else '⚠ optional'}")
-        print(f"  SMS Gateway: {'✓ configured' if os.getenv('SMS_GATEWAY_URL') else '⚠ optional'}")
+        sms_provider = (os.getenv('SMS_PROVIDER', '') or '').strip().lower()
+        if not sms_provider:
+            sms_status = '⚠ optional'
+        elif sms_provider == 'philsms':
+            sender_id = os.getenv('SMS_SENDER_ID') or os.getenv('SMS_SYSTEM_NUMBER') or os.getenv('SMS_FROM_NUMBER')
+            if not all(os.getenv(v) for v in EnvironmentValidator.SMS_PHILSMS_VARS):
+                sms_status = '⚠ incomplete'
+            elif not sender_id:
+                sms_status = '⚠ incomplete (missing sender id)'
+            else:
+                sms_status = '✓ configured'
+        elif sms_provider == 'startup':
+            if not all(os.getenv(v) for v in EnvironmentValidator.SMS_STARTUP_VARS):
+                sms_status = '⚠ incomplete'
+            else:
+                sms_status = '✓ configured'
+        elif sms_provider == 'twilio':
+            sms_status = '✓ configured' if all(os.getenv(v) for v in EnvironmentValidator.SMS_TWILIO_VARS) else '⚠ incomplete'
+        elif sms_provider == 'generic':
+            sms_status = '✓ configured' if all(os.getenv(v) for v in EnvironmentValidator.SMS_GENERIC_VARS) else '⚠ incomplete'
+        else:
+            sms_status = '⚠ unknown provider'
+
+        print(f"  SMS Provider: {sms_provider or 'not_set'}")
+        print(f"  SMS Gateway: {sms_status}")
         
         print("\n" + "="*70)
         print("✓ Backend is ready to start\n")
