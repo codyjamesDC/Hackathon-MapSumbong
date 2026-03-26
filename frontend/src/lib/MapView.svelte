@@ -653,7 +653,8 @@
       center: LOS_BANOS_CENTER,
       zoom: 13.7,
       pitch: 58,
-      bearing: -18
+      bearing: -18,
+      attributionControl: false
     });
 
     map.doubleClickZoom.disable();
@@ -686,8 +687,18 @@
       map.on('dblclick', onMapDoubleClick);
       map.on('contextmenu', onMapRightClick);
 
-      // Add zoom controls
-      map.addControl(new maplibregl.NavigationControl());
+      // Keep attribution pinned at the bottom-right edge.
+      map.addControl(new maplibregl.AttributionControl(), 'bottom-right');
+
+      // Keep only the compass and place it bottom-right above the map option cards.
+      map.addControl(
+        new maplibregl.NavigationControl({
+          showCompass: true,
+          showZoom: false,
+          visualizePitch: true
+        }),
+        'bottom-right'
+      );
 
       // Initial update
       updateBarangayStats($incidents);
@@ -790,6 +801,16 @@
     flex-direction: column;
     gap: 8px;
     z-index: 10;
+  }
+
+  /* Put only the compass directly above the Base Map / Barangay mode stack. */
+  :global(.maplibregl-ctrl-bottom-right .maplibregl-ctrl-group) {
+    margin: 0 12px 124px 0;
+  }
+
+  /* Keep attribution fixed at the bottom-right edge. */
+  :global(.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib) {
+    margin: 0 10px 10px 0;
   }
 
   .control-group {
