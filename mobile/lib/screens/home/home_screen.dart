@@ -74,7 +74,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // ── Stats Row ─────────────────────────────────────────────────
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
@@ -83,7 +82,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   AppSpacing.md,
                   0,
                 ),
-                child: _StatsRow(reports: reportsProvider.reports),
+                child: _QuickActionsCard(
+                  onCreateReport: _startNewReport,
+                  onOpenMap: () => context.go('/map'),
+                  onOpenReports: () => context.push('/reports'),
+                ),
               ),
             ),
 
@@ -95,11 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   AppSpacing.md,
                   0,
                 ),
-                child: _QuickActionsCard(
-                  onCreateReport: _startNewReport,
-                  onOpenMap: () => context.go('/map'),
-                  onOpenReports: () => context.push('/reports'),
-                ),
+                child: _AnalyticsCard(reports: reportsProvider.reports),
               ),
             ),
 
@@ -417,6 +416,50 @@ class _QuickActionsCard extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnalyticsCard extends StatelessWidget {
+  final List<Report> reports;
+
+  const _AnalyticsCard({required this.reports});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Analytics',
+            style: TextStyle(
+              fontFamily: 'Nunito',
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Buod ng estado ng mga report sa komunidad.',
+            style: TextStyle(
+              fontFamily: 'Nunito',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _StatsRow(reports: reports),
         ],
       ),
     );
