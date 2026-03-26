@@ -3,12 +3,12 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
-// Los Baños, Laguna bounds
+// Los Baños, Laguna bounds - from Overpass Turbo barangay data
 const _losBanosBounds = {
-  'minLat': 14.13,
-  'maxLat': 14.21,
-  'minLng': 121.22,
-  'maxLng': 121.27,
+  'minLat': 14.111328,
+  'maxLat': 14.197138,
+  'minLng': 121.171335,
+  'maxLng': 121.266119,
 };
 
 // Default center: Los Baños, Laguna, Philippines
