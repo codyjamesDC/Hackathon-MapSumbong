@@ -20,6 +20,7 @@ class _ReportsListScreenState extends State<ReportsListScreen>
   late TabController _tabController;
   late final TextEditingController _searchController;
   String _searchQuery = '';
+  ReportsProvider? _reportsProvider;
 
   static const _tabs = [
     (label: 'Lahat', status: ''),
@@ -46,10 +47,13 @@ class _ReportsListScreenState extends State<ReportsListScreen>
       return;
     }
     await reports.loadReports(userId: id);
+    reports.subscribeToReportUpdates(id);
+    _reportsProvider = reports;
   }
 
   @override
   void dispose() {
+    _reportsProvider?.unsubscribeFromReports();
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();

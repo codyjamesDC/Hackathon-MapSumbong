@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../models/report.dart';
@@ -11,28 +12,79 @@ import '../../widgets/app_components.dart';
 class ReportDetailScreen extends StatefulWidget {
   final String reportId;
 
-  const ReportDetailScreen({
-    super.key,
-    required this.reportId,
-  });
+  const ReportDetailScreen({super.key, required this.reportId});
 
   @override
   State<ReportDetailScreen> createState() => _ReportDetailScreenState();
 }
 
 class _ReportDetailScreenState extends State<ReportDetailScreen> {
+  bool _looksLikeUrl(String? value) {
+    if (value == null) return false;
+    final raw = value.trim();
+    if (raw.isEmpty) return false;
+    final uri = Uri.tryParse(raw);
+    return uri != null &&
+        uri.hasScheme &&
+        (uri.scheme == 'http' || uri.scheme == 'https');
+  }
+
+  bool _isLikelyImageUrl(String? value) {
+    if (!_looksLikeUrl(value)) return false;
+    final lower = value!.toLowerCase();
+    return lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.gif');
+  }
+
+  bool _isPdfUrl(String? value) {
+    if (!_looksLikeUrl(value)) return false;
+    return value!.toLowerCase().contains('.pdf');
+  }
+
+  String _fileNameFromUrl(String? value, {String fallback = 'file'}) {
+    if (!_looksLikeUrl(value)) return fallback;
+    final uri = Uri.tryParse(value!);
+    if (uri == null || uri.pathSegments.isEmpty) return fallback;
+    return uri.pathSegments.last;
+  }
+
+  Future<void> _openExternalUrl(String rawUrl) async {
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid file link.')));
+      return;
+    }
+
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open file link.')),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<ReportsProvider>(context, listen: false)
-          .selectReport(widget.reportId);
+      Provider.of<ReportsProvider>(
+        context,
+        listen: false,
+      ).selectReport(widget.reportId);
     });
   }
 
   Future<void> _refreshReport() {
-    return Provider.of<ReportsProvider>(context, listen: false)
-        .selectReport(widget.reportId);
+    return Provider.of<ReportsProvider>(
+      context,
+      listen: false,
+    ).selectReport(widget.reportId);
   }
 
   @override
@@ -50,8 +102,9 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_rounded, size: 18),
         color: AppColors.textPrimary,
-        onPressed: () =>
-            Navigator.of(context).canPop() ? context.pop() : context.go('/reports'),
+        onPressed: () => Navigator.of(context).canPop()
+            ? context.pop()
+            : context.go('/reports'),
       ),
       title: Text(
         report != null ? 'Report ${report.id}' : 'Report',
@@ -90,8 +143,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.cloud_off_rounded,
-                    size: 56, color: AppColors.textMuted),
+                const Icon(
+                  Icons.cloud_off_rounded,
+                  size: 56,
+                  color: AppColors.textMuted,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Hindi ma-load ang report',
@@ -140,8 +196,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.search_off_rounded,
-                  size: 56, color: AppColors.textMuted),
+              const Icon(
+                Icons.search_off_rounded,
+                size: 56,
+                color: AppColors.textMuted,
+              ),
               const SizedBox(height: 16),
               const Text(
                 'Hindi natagpuan ang report',
@@ -193,8 +252,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                 child: const Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.pending_actions_rounded,
-                        size: 18, color: Colors.amber),
+                    Icon(
+                      Icons.pending_actions_rounded,
+                      size: 18,
+                      color: Colors.amber,
+                    ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -308,8 +370,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                         width: 200,
                         height: 200,
                         color: Colors.grey[200],
-                        child: const Center(
-                            child: CircularProgressIndicator()),
+                        child: const Center(child: CircularProgressIndicator()),
                       ),
                       errorWidget: (_, _, _) => Container(
                         width: 200,
@@ -324,7 +385,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             ],
 
             // Resolution
-            if (report.resolutionNote != null) ...[
+            if ((report.resolutionNote ?? '').trim().isNotEmpty ||
+                (report.resolutionPhotoUrl ?? '').trim().isNotEmpty) ...[
               const SizedBox(height: 24),
               _SectionLabel('Resolution'),
               const SizedBox(height: 8),
@@ -340,8 +402,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.check_circle,
-                            color: Colors.green, size: 16),
+                        const Icon(
+                          Icons.check_circle,
+                          color: Colors.green,
+                          size: 16,
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           report.resolvedBy ?? 'Barangay officials',
@@ -352,8 +417,201 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(report.resolutionNote!),
+                    if ((report.resolutionNote ?? '').trim().isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Written report',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      if (_looksLikeUrl(report.resolutionNote)) ...[
+                        InkWell(
+                          onTap: () =>
+                              _openExternalUrl(report.resolutionNote!.trim()),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.green.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _isPdfUrl(report.resolutionNote)
+                                      ? Icons.picture_as_pdf_rounded
+                                      : Icons.description_rounded,
+                                  color: Colors.green.shade700,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _fileNameFromUrl(
+                                      report.resolutionNote,
+                                      fallback: 'Open written report',
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.green.shade800,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(
+                                  Icons.open_in_new_rounded,
+                                  size: 16,
+                                  color: Colors.green.shade700,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ] else ...[
+                        Text(report.resolutionNote!.trim()),
+                      ],
+                    ],
+                    if ((report.resolutionPhotoUrl ?? '')
+                        .trim()
+                        .isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Photo evidence',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      if (_isLikelyImageUrl(report.resolutionPhotoUrl)) ...[
+                        GestureDetector(
+                          onTap: () => _openExternalUrl(
+                            report.resolutionPhotoUrl!.trim(),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: CachedNetworkImage(
+                              imageUrl: report.resolutionPhotoUrl!.trim(),
+                              width: double.infinity,
+                              height: 180,
+                              fit: BoxFit.cover,
+                              placeholder: (_, _) => Container(
+                                height: 180,
+                                color: Colors.green.shade100,
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
+                              errorWidget: (_, error, stackTrace) => Container(
+                                height: 88,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.green.shade200,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.link_rounded,
+                                      color: Colors.green.shade700,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _fileNameFromUrl(
+                                          report.resolutionPhotoUrl,
+                                          fallback: 'Open photo evidence',
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.green.shade800,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Icon(
+                                      Icons.open_in_new_rounded,
+                                      size: 16,
+                                      color: Colors.green.shade700,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ] else if (_looksLikeUrl(report.resolutionPhotoUrl)) ...[
+                        InkWell(
+                          onTap: () => _openExternalUrl(
+                            report.resolutionPhotoUrl!.trim(),
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.green.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.link_rounded,
+                                  color: Colors.green.shade700,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _fileNameFromUrl(
+                                      report.resolutionPhotoUrl,
+                                      fallback: 'Open photo evidence',
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.green.shade800,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(
+                                  Icons.open_in_new_rounded,
+                                  size: 16,
+                                  color: Colors.green.shade700,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ],
                 ),
               ),
@@ -369,7 +627,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                 icon: const Icon(Icons.chat),
                 label: const Text('Chat with Authorities'),
                 style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
               ),
             ),
 
@@ -382,7 +641,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                   icon: const Icon(Icons.refresh),
                   label: const Text('Issue Still Exists? Reopen'),
                   style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                 ),
               ),
             ],
@@ -432,11 +692,14 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             onPressed: () async {
               if (reasonCtrl.text.trim().isEmpty) return;
               Navigator.pop(ctx);
-              final provider =
-                  Provider.of<ReportsProvider>(context, listen: false);
-              final anon = Provider.of<AuthProvider>(context, listen: false)
-                  .user
-                  ?.anonymousId;
+              final provider = Provider.of<ReportsProvider>(
+                context,
+                listen: false,
+              );
+              final anon = Provider.of<AuthProvider>(
+                context,
+                listen: false,
+              ).user?.anonymousId;
               try {
                 await provider.updateReportStatus(
                   report.id,
@@ -471,15 +734,15 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   void _shareReport(BuildContext context, Report report) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Report ID: ${report.id} — share this with your neighbors'),
+        content: Text(
+          'Report ID: ${report.id} — share this with your neighbors',
+        ),
       ),
     );
   }
 
-  String _formatIssueType(String type) => type
-      .split('_')
-      .map((w) => w[0].toUpperCase() + w.substring(1))
-      .join(' ');
+  String _formatIssueType(String type) =>
+      type.split('_').map((w) => w[0].toUpperCase() + w.substring(1)).join(' ');
 
   IconData _issueIcon(String type) {
     switch (type) {
@@ -518,20 +781,20 @@ class _StatusBanner extends StatelessWidget {
     final (color, label, icon) = switch (status.toLowerCase()) {
       'received' => (Colors.blue, 'Received — awaiting review', Icons.inbox),
       'in_progress' => (
-          Colors.orange,
-          'In Progress — being handled',
-          Icons.engineering
-        ),
+        Colors.orange,
+        'In Progress — being handled',
+        Icons.engineering,
+      ),
       'repair_scheduled' => (
-          Colors.purple,
-          'Repair Scheduled',
-          Icons.calendar_today
-        ),
+        Colors.purple,
+        'Repair Scheduled',
+        Icons.calendar_today,
+      ),
       'resolved' when isPendingProof => (
-          Colors.amber,
-          'Resolved - pending proof',
-          Icons.pending_actions_rounded
-        ),
+        Colors.amber,
+        'Resolved - pending proof',
+        Icons.pending_actions_rounded,
+      ),
       'resolved' => (Colors.green, 'Resolved ✓', Icons.check_circle),
       'reopened' => (Colors.red, 'Reopened — under review', Icons.refresh),
       _ => (Colors.grey, status, Icons.info),
@@ -551,7 +814,10 @@ class _StatusBanner extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-                color: color, fontSize: 15, fontWeight: FontWeight.w500),
+              color: color,
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),
@@ -568,7 +834,10 @@ class _SectionLabel extends StatelessWidget {
     return Text(
       text,
       style: const TextStyle(
-          fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey),
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: Colors.grey,
+      ),
     );
   }
 }
@@ -577,8 +846,11 @@ class _InfoChip extends StatelessWidget {
   final String label;
   final Color color;
   final IconData icon;
-  const _InfoChip(
-      {required this.label, required this.color, required this.icon});
+  const _InfoChip({
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -594,9 +866,14 @@ class _InfoChip extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 4),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 12, color: color, fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
@@ -616,11 +893,14 @@ class _TimelineRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 70,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w500)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           Text(
             '${dt.day}/${dt.month}/${dt.year} '
@@ -639,10 +919,8 @@ class _HeaderCard extends StatelessWidget {
 
   const _HeaderCard({required this.report});
 
-  String _formatIssueType(String type) => type
-      .split('_')
-      .map((w) => w[0].toUpperCase() + w.substring(1))
-      .join(' ');
+  String _formatIssueType(String type) =>
+      type.split('_').map((w) => w[0].toUpperCase() + w.substring(1)).join(' ');
 
   IconData _issueIcon(String type) {
     switch (type) {
@@ -706,8 +984,11 @@ class _HeaderCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.location_on_outlined,
-                  size: 16, color: AppColors.textMuted),
+              const Icon(
+                Icons.location_on_outlined,
+                size: 16,
+                color: AppColors.textMuted,
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -727,8 +1008,11 @@ class _HeaderCard extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              const Icon(Icons.schedule_rounded,
-                  size: 16, color: AppColors.textMuted),
+              const Icon(
+                Icons.schedule_rounded,
+                size: 16,
+                color: AppColors.textMuted,
+              ),
               const SizedBox(width: 6),
               Text(
                 'Nireport noong ${_formatDate(report.createdAt)}',
@@ -752,6 +1036,45 @@ class _TimelineCard extends StatelessWidget {
 
   const _TimelineCard({required this.report});
 
+  bool _hasText(String? value) => value != null && value.trim().isNotEmpty;
+
+  bool _looksLikeUrl(String? value) {
+    if (!_hasText(value)) return false;
+    final uri = Uri.tryParse(value!.trim());
+    return uri != null &&
+        uri.hasScheme &&
+        (uri.scheme == 'http' || uri.scheme == 'https');
+  }
+
+  String _resolutionSubtitle() {
+    final note = report.resolutionNote?.trim();
+    final photo = report.resolutionPhotoUrl?.trim();
+
+    final hasNote = _hasText(note);
+    final hasPhoto = _hasText(photo);
+    final noteIsUrl = _looksLikeUrl(note);
+    final photoIsUrl = _looksLikeUrl(photo);
+
+    if (hasNote && hasPhoto) {
+      if (noteIsUrl || photoIsUrl) {
+        return 'Written report and photo evidence uploaded.';
+      }
+      return note!;
+    }
+
+    if (hasNote) {
+      if (noteIsUrl) return 'Written report uploaded.';
+      return note!;
+    }
+
+    if (hasPhoto) {
+      if (photoIsUrl) return 'Photo evidence uploaded.';
+      return 'Photo evidence attached by barangay.';
+    }
+
+    return 'Tinarkahang resolved ng barangay.';
+  }
+
   List<({String title, String subtitle, DateTime time})> get _events {
     final events = <({String title, String subtitle, DateTime time})>[
       (
@@ -769,9 +1092,7 @@ class _TimelineCard extends StatelessWidget {
     if (report.resolvedAt != null) {
       events.add((
         title: 'Marked resolved',
-        subtitle: report.resolutionNote?.isNotEmpty == true
-            ? report.resolutionNote!
-            : 'Tinarkahang resolved ng barangay.',
+        subtitle: _resolutionSubtitle(),
         time: report.resolvedAt!,
       ));
     }
@@ -814,7 +1135,9 @@ class _TimelineCard extends StatelessWidget {
                         width: 10,
                         height: 10,
                         decoration: BoxDecoration(
-                          color: isLatest ? AppColors.primary : AppColors.textMuted,
+                          color: isLatest
+                              ? AppColors.primary
+                              : AppColors.textMuted,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -842,8 +1165,9 @@ class _TimelineCard extends StatelessWidget {
                             fontFamily: 'Nunito',
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
-                            color:
-                                isLatest ? AppColors.primary : AppColors.textPrimary,
+                            color: isLatest
+                                ? AppColors.primary
+                                : AppColors.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 2),

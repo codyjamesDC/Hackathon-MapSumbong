@@ -16,9 +16,11 @@ import 'screens/reports/report_detail_screen.dart';
 import 'screens/reports/create_report_options_screen.dart';
 import 'screens/reports/manual_report_form_screen.dart';
 import 'screens/chat/chat_screen.dart';
+import 'screens/chat/chats_home_screen.dart';
 import 'screens/map/map_screen.dart';
 import 'screens/location/location_picker_screen.dart';
 import 'screens/profile/profile_screen.dart';
+import 'screens/navigation/main_navigation_shell.dart';
 import 'theme/app_theme.dart';
 
 void _logDebug(String message) {
@@ -42,16 +44,12 @@ Future<void> main() async {
     }
 
     _logDebug('✓ Initializing Supabase...');
-    await Supabase.initialize(
-      url: supabaseUrl,
-      anonKey: supabaseKey,
-    );
+    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
     _logDebug('✓ Supabase initialized successfully');
 
     _logDebug('✓ Initializing notifications...');
     await NotificationService.initialize();
     _logDebug('✓ Notifications initialized');
-
   } catch (e, stackTrace) {
     _logDebug('❌ Initialization error: $e');
     _logDebug('Stack trace: $stackTrace');
@@ -86,13 +84,11 @@ GoRouter _buildRouter() {
   return GoRouter(
     initialLocation: '/auth',
     redirect: (context, state) {
-      final authProvider =
-          Provider.of<AuthProvider>(context, listen: false);
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final isAuthenticated = authProvider.isAuthenticated;
       final path = state.uri.path;
 
-      final isAuthRoute =
-          path.startsWith('/auth') || path.startsWith('/otp');
+      final isAuthRoute = path.startsWith('/auth') || path.startsWith('/otp');
 
       if (!isAuthenticated && !isAuthRoute) return '/auth';
       if (isAuthenticated && isAuthRoute) return '/home';
@@ -110,17 +106,56 @@ GoRouter _buildRouter() {
           return OtpVerificationScreen(phoneNumber: phone);
         },
       ),
-      GoRoute(
-        path: '/home',
-        builder: (context, state) => const HomeScreen(),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return MainNavigationShell(navigationShell: navigationShell);
+        },
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/home',
+                builder: (context, state) => const HomeScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/map',
+                builder: (context, state) => const MapScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/create-report',
+                builder: (context, state) => const CreateReportOptionsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/chats',
+                builder: (context, state) => const ChatsHomeScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/profile',
+                builder: (context, state) => const ProfileScreen(),
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: '/reports',
         builder: (context, state) => const ReportsListScreen(),
-      ),
-      GoRoute(
-        path: '/create-report',
-        builder: (context, state) => const CreateReportOptionsScreen(),
       ),
       GoRoute(
         path: '/create-report/manual',
@@ -139,14 +174,6 @@ GoRouter _buildRouter() {
           final reportId = state.pathParameters['reportId']!;
           return ChatScreen(reportId: reportId);
         },
-      ),
-      GoRoute(
-        path: '/map',
-        builder: (context, state) => const MapScreen(),
-      ),
-      GoRoute(
-        path: '/profile',
-        builder: (context, state) => const ProfileScreen(),
       ),
       // Location picker — navigated to imperatively via Navigator.push
       // so it can return a LatLng value back to the caller

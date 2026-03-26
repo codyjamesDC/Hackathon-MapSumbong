@@ -19,7 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ReportsProvider? _reportsProvider;
 
   void _startNewReport() {
-    context.push('/create-report');
+    context.go('/create-report');
   }
 
   @override
@@ -75,9 +75,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: Colors.white.withOpacity(0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.map_outlined, color: Colors.white, size: 18),
+                    child: const Icon(
+                      Icons.map_outlined,
+                      color: Colors.white,
+                      size: 18,
+                    ),
                   ),
-                  onPressed: () => context.push('/map'),
+                  onPressed: () => context.go('/map'),
                 ),
                 const SizedBox(width: 4),
                 IconButton(
@@ -88,9 +92,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: Colors.white.withOpacity(0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person_outline_rounded, color: Colors.white, size: 18),
+                    child: const Icon(
+                      Icons.person_outline_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
                   ),
-                  onPressed: () => context.push('/profile'),
+                  onPressed: () => context.go('/profile'),
                 ),
                 const SizedBox(width: 8),
               ],
@@ -107,7 +115,11 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md, AppSpacing.lg, AppSpacing.md, 0),
+                  AppSpacing.md,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                  0,
+                ),
                 child: _StatsRow(reports: reportsProvider.reports),
               ),
             ),
@@ -115,10 +127,14 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  0,
+                ),
                 child: _QuickActionsCard(
                   onCreateReport: _startNewReport,
-                  onOpenMap: () => context.push('/map'),
+                  onOpenMap: () => context.go('/map'),
                   onOpenReports: () => context.push('/reports'),
                 ),
               ),
@@ -128,7 +144,11 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md, AppSpacing.lg, AppSpacing.md, AppSpacing.sm),
+                  AppSpacing.md,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                ),
                 child: SectionHeader(
                   title: 'Mga Kamakailang Report',
                   action: 'Tingnan lahat',
@@ -151,7 +171,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: EmptyStateView(
                     icon: Icons.report_problem_outlined,
                     title: 'Wala pang mga report',
-                    subtitle: 'Tumulong sa iyong komunidad sa pag-uulat ng mga problema.',
+                    subtitle:
+                        'Tumulong sa iyong komunidad sa pag-uulat ng mga problema.',
                     buttonLabel: 'Lumikha ng Report',
                     onButton: _startNewReport,
                   ),
@@ -160,23 +181,24 @@ class _HomeScreenState extends State<HomeScreen> {
             else
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md, 0, AppSpacing.md, 100),
+                  AppSpacing.md,
+                  0,
+                  AppSpacing.md,
+                  100,
+                ),
                 sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final report = reportsProvider.reports
-                          .take(5)
-                          .toList()[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: ReportCard(
-                          report: report,
-                          onTap: () => context.push('/reports/${report.id}'),
-                        ),
-                      );
-                    },
-                    childCount: reportsProvider.reports.length.clamp(0, 5),
-                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final report = reportsProvider.reports
+                        .take(5)
+                        .toList()[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: ReportCard(
+                        report: report,
+                        onTap: () => context.push('/reports/${report.id}'),
+                      ),
+                    );
+                  }, childCount: reportsProvider.reports.length.clamp(0, 5)),
                 ),
               ),
           ],
@@ -261,8 +283,7 @@ class _HeroBanner extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               // Quick status row
-              if (reports.isNotEmpty)
-                _QuickStatus(reports: reports),
+              if (reports.isNotEmpty) _QuickStatus(reports: reports),
               const SizedBox(height: 8),
               ElevatedButton.icon(
                 onPressed: onQuickReport,
@@ -306,7 +327,10 @@ class _QuickStatus extends StatelessWidget {
 
     return Row(
       children: [
-        _QuickChip(label: '${reports.length} total', icon: Icons.list_alt_rounded),
+        _QuickChip(
+          label: '${reports.length} total',
+          icon: Icons.list_alt_rounded,
+        ),
         const SizedBox(width: 8),
         if (pending > 0)
           _QuickChip(
