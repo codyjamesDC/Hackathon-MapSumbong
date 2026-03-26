@@ -18,6 +18,23 @@ from utils.security import require_roles
 router = APIRouter()
 
 
+def _has_text(value: Optional[str]) -> bool:
+    return bool(value and str(value).strip())
+
+
+def _annotate_resolution_state(report: dict) -> dict:
+    status = str(report.get('status') or '').lower()
+    is_resolved = status == 'resolved'
+    has_note = _has_text(report.get('resolution_note'))
+    has_photo = _has_text(report.get('resolution_photo_url'))
+    resolution_complete = is_resolved and has_note and has_photo
+
+    enriched = dict(report)
+    enriched['resolution_complete'] = resolution_complete
+    enriched['resolution_pending_proof'] = is_resolved and not resolution_complete
+    return enriched
+
+
 def _get_supabase():
     """Lazy-load so .env is always read before client creation."""
     return create_client(
@@ -65,10 +82,11 @@ async def get_reports(
 
         query = query.order('created_at', desc=True).range(offset, offset + limit - 1)
         response = query.execute()
+        reports = [_annotate_resolution_state(r) for r in (response.data or [])]
 
         return {
-            'reports': response.data,
-            'total': len(response.data),
+            'reports': reports,
+            'total': len(reports),
             'limit': limit,
             'offset': offset,
         }
@@ -89,7 +107,7 @@ async def get_report(
     if not response.data:
         raise HTTPException(status_code=404, detail='Report not found')
 
-    return response.data[0]
+    return _annotate_resolution_state(response.data[0])
 
 
 @router.patch('/reports/{report_id}/status')
@@ -131,7 +149,16 @@ async def update_report_status(
             'note': f'Status changed to {request.status}',
         }).execute()
 
-        return {'success': True, 'report_id': report_id, 'new_status': request.status}
+        updated_row = update_result.data[0] if update_result.data else {'status': request.status}
+        enriched = _annotate_resolution_state(updated_row)
+
+        return {
+            'success': True,
+            'report_id': report_id,
+            'new_status': request.status,
+            'resolution_complete': enriched['resolution_complete'],
+            'resolution_pending_proof': enriched['resolution_pending_proof'],
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
