@@ -3,7 +3,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../models/report.dart';
 import '../../theme/app_theme.dart';
@@ -43,13 +42,10 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider =
-          Provider.of<AuthProvider>(context, listen: false);
       final reportsProvider =
           Provider.of<ReportsProvider>(context, listen: false);
-      final id = authProvider.user?.anonymousId;
-      if (id != null && reportsProvider.reports.isEmpty) {
-        reportsProvider.loadReports(userId: id);
+      if (reportsProvider.reports.isEmpty) {
+        reportsProvider.loadReports();
       }
     });
   }
@@ -80,12 +76,7 @@ class _MapScreenState extends State<MapScreen> {
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
             onPressed: () {
-              final authProvider =
-                  Provider.of<AuthProvider>(context, listen: false);
-              final id = authProvider.user?.anonymousId;
-              if (id != null) {
-                reportsProvider.loadReports(userId: id);
-              }
+              reportsProvider.loadReports();
             },
           ),
         ],

@@ -40,13 +40,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
       _reportsProvider = Provider.of<ReportsProvider>(context, listen: false);
-      final anonymousId = authProvider.user?.anonymousId;
-      if (anonymousId != null) {
-        _reportsProvider?.loadReports(userId: anonymousId);
-        _reportsProvider?.subscribeToReportUpdates(anonymousId);
-      }
+      _reportsProvider?.loadReports();
+      _reportsProvider?.subscribeToAllReports();
     });
   }
 
@@ -67,8 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: RefreshIndicator(
         color: AppColors.primary,
         onRefresh: () async {
-          final id = user?.anonymousId;
-          if (id != null) await reportsProvider.loadReports(userId: id);
+          await reportsProvider.loadReports();
         },
         child: CustomScrollView(
           slivers: [

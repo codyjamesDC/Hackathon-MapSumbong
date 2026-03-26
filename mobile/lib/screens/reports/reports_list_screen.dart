@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../models/report.dart';
 import '../../theme/app_theme.dart';
@@ -39,15 +38,9 @@ class _ReportsListScreenState extends State<ReportsListScreen>
   }
 
   Future<void> _loadReports() async {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
     final reports = Provider.of<ReportsProvider>(context, listen: false);
-    final id = auth.user?.anonymousId;
-    if (id == null) {
-      reports.clearError();
-      return;
-    }
-    await reports.loadReports(userId: id);
-    reports.subscribeToReportUpdates(id);
+    await reports.loadReports();
+    reports.subscribeToAllReports();
     _reportsProvider = reports;
   }
 
@@ -235,17 +228,6 @@ class _ReportTabView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    if (auth.user?.anonymousId == null) {
-      return EmptyStateView(
-        icon: Icons.login_rounded,
-        title: 'Mag-sign in muna',
-        subtitle: 'Kailangan ang iyong account para makita ang mga report.',
-        buttonLabel: 'Bumalik',
-        onButton: () => context.go('/auth'),
-      );
-    }
-
     if (reportsProvider.isLoading && reportsProvider.reports.isEmpty) {
       return const AppLoader(message: 'Nilo-load...');
     }

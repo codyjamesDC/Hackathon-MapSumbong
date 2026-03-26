@@ -11,6 +11,9 @@ void _logDebug(String message) {
 }
 
 class AuthProvider with ChangeNotifier {
+  static const bool _devOtpMode = true;
+  static const String _devOtpCode = '042905';
+
   app_user.User? _user;
   bool _isLoading = false;
   String? _error;
@@ -87,7 +90,12 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      await AuthService.signInWithPhone(phoneNumber);
+      if (_devOtpMode) {
+        // Dev OTP mode: skip SMS provider and let user proceed to OTP screen.
+        await Future.delayed(const Duration(milliseconds: 250));
+      } else {
+        await AuthService.signInWithPhone(phoneNumber);
+      }
     } catch (e) {
       if (_isStaleOp(opId)) return;
       _error = _friendlyError(e.toString());
@@ -106,11 +114,36 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await AuthService.verifyOTP(phoneNumber, otp);
-      if (_isStaleOp(opId)) return;
-      final verifiedUser = response.user;
-      if (verifiedUser != null) {
-        _user = app_user.User.fromSupabaseUser(verifiedUser);
+      if (_devOtpMode) {
+        final code = otp.trim();
+        if (code != _devOtpCode) {
+          throw Exception('Invalid OTP');
+        }
+
+        final normalized = phoneNumber.replaceAll(RegExp(r'[^0-9+]'), '');
+        final digitsOnly = normalized.replaceAll('+', '');
+        final suffix = digitsOnly.length >= 4
+            ? digitsOnly.substring(digitsOnly.length - 4)
+            : digitsOnly.padLeft(4, '0');
+
+        _user = app_user.User(
+          id: 'dev-otp-$suffix',
+          anonymousId: 'ANON-DEV-$suffix',
+          accountType: 'resident',
+          displayName: 'Dev Resident $suffix',
+          isAnonymous: true,
+          barangay: 'Los Baños',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        _error = null;
+      } else {
+        final response = await AuthService.verifyOTP(phoneNumber, otp);
+        if (_isStaleOp(opId)) return;
+        final verifiedUser = response.user;
+        if (verifiedUser != null) {
+          _user = app_user.User.fromSupabaseUser(verifiedUser);
+        }
       }
     } catch (e) {
       if (_isStaleOp(opId)) return;
@@ -239,7 +272,7 @@ class AuthProvider with ChangeNotifier {
       return 'OTP expired. Please request a new code.';
     }
     if (raw.contains('Invalid OTP') || raw.contains('invalid_otp')) {
-      return 'Incorrect code. Please check the SMS and try again.';
+      return 'Incorrect code.';
     }
     if (raw.contains('rate limit') || raw.contains('429')) {
       return 'Too many attempts. Please wait a minute and try again.';

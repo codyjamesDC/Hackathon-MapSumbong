@@ -20,6 +20,9 @@ class OtpVerificationScreen extends StatefulWidget {
 }
 
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
+  static const String _devOtp = '042905';
+  static const int _otpLength = 6;
+
   final _pinController = TextEditingController();
   Timer? _resendTicker;
   bool _canResend = false;
@@ -30,7 +33,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   void initState() {
     super.initState();
     _pinController.addListener(() {
-      final isComplete = _pinController.text.trim().length == 6;
+      final isComplete = _pinController.text.trim().length == _otpLength;
       if (isComplete != _isCodeComplete) {
         setState(() {
           _isCodeComplete = isComplete;
@@ -77,13 +80,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   String get _maskedPhone {
     if (widget.phoneNumber.length <= 4) return widget.phoneNumber;
     final head = widget.phoneNumber.substring(0, widget.phoneNumber.length - 4);
-    final tail = widget.phoneNumber.substring(widget.phoneNumber.length - 4);
-    return '$head••••$tail';
+    return '$head••••';
   }
 
   Future<void> _verifyOTP() async {
     final code = _pinController.text.trim();
-    if (code.length != 6) return;
+    if (code.length != _otpLength) return;
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
@@ -194,7 +196,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
               // Title
               Text(
-                'Ilagay ang 6-digit code',
+                'Ilagay ang $_otpLength-digit code',
                 style: titleStyle,
               ),
 
@@ -212,7 +214,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               // PIN input
               Pinput(
                 controller: _pinController,
-                length: 6,
+                length: _otpLength,
                 keyboardType: TextInputType.number,
                 onCompleted: (_) => _verifyOTP(),
                 defaultPinTheme: defaultPinTheme,

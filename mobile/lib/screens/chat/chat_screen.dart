@@ -172,9 +172,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) return;
 
     if (reportId != null) {
-      await Provider.of<ReportsProvider>(context, listen: false).loadReports(
-        userId: auth.user!.anonymousId,
-      );
+      await Provider.of<ReportsProvider>(context, listen: false).loadReports();
     }
 
     if (!mounted) return;

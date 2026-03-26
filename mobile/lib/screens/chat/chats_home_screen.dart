@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../providers/auth_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../theme/app_theme.dart';
 
@@ -15,12 +14,8 @@ class ChatsHomeScreen extends StatefulWidget {
 
 class _ChatsHomeScreenState extends State<ChatsHomeScreen> {
   Future<void> _loadReportHistory() async {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
     final reports = Provider.of<ReportsProvider>(context, listen: false);
-    final id = auth.user?.anonymousId;
-    if (id != null) {
-      await reports.loadReports(userId: id);
-    }
+    await reports.loadReports();
   }
 
   @override
@@ -33,16 +28,9 @@ class _ChatsHomeScreenState extends State<ChatsHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
     final reportsProvider = Provider.of<ReportsProvider>(context);
-    final anonymousId = authProvider.user?.anonymousId;
     final reports =
-        reportsProvider.reports
-            .where(
-              (r) =>
-                  anonymousId != null && r.reporterAnonymousId == anonymousId,
-            )
-            .toList()
+        reportsProvider.reports.toList()
           ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
     return Scaffold(
