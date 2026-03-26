@@ -8,9 +8,8 @@ import '../services/supabase_service.dart';
 
 typedef SendMessageApi = Future<Message> Function(Message message);
 typedef GetMessagesApi = Future<List<Message>> Function(String reportId);
-typedef SubscribeMessagesApi = Stream<List<Map<String, dynamic>>> Function(
-  String reportId,
-);
+typedef SubscribeMessagesApi =
+    Stream<List<Map<String, dynamic>>> Function(String reportId);
 
 class MessagesProvider with ChangeNotifier {
   List<Message> _messages = [];
@@ -47,10 +46,10 @@ class MessagesProvider with ChangeNotifier {
     SendMessageApi? sendMessageApi,
     GetMessagesApi? getMessagesApi,
     SubscribeMessagesApi? subscribeMessagesApi,
-  })  : _sendMessageApi = sendMessageApi ?? ApiService.sendMessage,
-        _getMessagesApi = getMessagesApi ?? SupabaseService.getMessagesForReport,
-        _subscribeMessagesApi =
-            subscribeMessagesApi ?? SupabaseService.subscribeToMessages {
+  }) : _sendMessageApi = sendMessageApi ?? ApiService.sendMessage,
+       _getMessagesApi = getMessagesApi ?? SupabaseService.getMessagesForReport,
+       _subscribeMessagesApi =
+           subscribeMessagesApi ?? SupabaseService.subscribeToMessages {
     _initializeOfflineState();
   }
 
@@ -72,17 +71,27 @@ class MessagesProvider with ChangeNotifier {
     _error = null;
     notifyListeners();
 
+    final cached = await OfflineStoreService.loadReportMessages(reportId);
+    if (cached.isNotEmpty) {
+      _messages = List<Message>.from(cached)
+        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      notifyListeners();
+    }
+
     try {
-      _messages = await _getMessagesApi(reportId);
-      _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      final fetched = await _getMessagesApi(reportId)
+        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+      // Prefer remote source of truth, but keep cached history if fetch returns
+      // empty and we already have local history to show.
+      if (fetched.isNotEmpty || cached.isEmpty) {
+        _messages = fetched;
+      }
+
       await OfflineStoreService.saveReportMessages(reportId, _messages);
       _hasConnectionIssue = false;
     } catch (e) {
       _error = e.toString();
-      final cached = await OfflineStoreService.loadReportMessages(reportId);
-      if (cached.isNotEmpty) {
-        _messages = cached;
-      }
       _hasConnectionIssue = true;
     } finally {
       _isLoading = false;
@@ -120,7 +129,8 @@ class MessagesProvider with ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _hasConnectionIssue = true;
-      _error = 'Hindi naisend ang mensahe. Ika-queue muna at ire-retry kapag may koneksyon.';
+      _error =
+          'Hindi naisend ang mensahe. Ika-queue muna at ire-retry kapag may koneksyon.';
       if (!_queuedMessages.any((m) => m.id == message.id)) {
         _queuedMessages.add(message);
         await OfflineStoreService.saveQueuedMessages(_queuedMessages);
@@ -202,19 +212,22 @@ class MessagesProvider with ChangeNotifier {
         _sessionId = result['session_id'] as String;
       }
 
-      final aiText = result['response'] as String? ??
+      final aiText =
+          result['response'] as String? ??
           result['chatbot_response'] as String? ??
           'Salamat sa inyong mensahe!';
 
-      _messages.add(Message(
-        id: '${DateTime.now().millisecondsSinceEpoch}_ai',
-        reportId: reportId,
-        senderId: 'ai_assistant',
-        senderType: 'ai',
-        content: aiText,
-        timestamp: DateTime.now(),
-        messageType: 'text',
-      ));
+      _messages.add(
+        Message(
+          id: '${DateTime.now().millisecondsSinceEpoch}_ai',
+          reportId: reportId,
+          senderId: 'ai_assistant',
+          senderType: 'ai',
+          content: aiText,
+          timestamp: DateTime.now(),
+          messageType: 'text',
+        ),
+      );
 
       final isComplete = result['is_complete'] as bool? ?? false;
       final reportData = result['report_data'] as Map<String, dynamic>?;
@@ -227,30 +240,34 @@ class MessagesProvider with ChangeNotifier {
         }
         _pendingReportData = reportData;
 
-        _messages.add(Message(
-          id: '${DateTime.now().millisecondsSinceEpoch}_sys',
-          reportId: reportId,
-          senderId: 'system',
-          senderType: 'system',
-          content: '✅ Report details captured. Tap "Submit Report" to save.',
-          timestamp: DateTime.now(),
-          messageType: 'system',
-        ));
+        _messages.add(
+          Message(
+            id: '${DateTime.now().millisecondsSinceEpoch}_sys',
+            reportId: reportId,
+            senderId: 'system',
+            senderType: 'system',
+            content: '✅ Report details captured. Tap "Submit Report" to save.',
+            timestamp: DateTime.now(),
+            messageType: 'system',
+          ),
+        );
       }
       _hasConnectionIssue = false;
       await _persistActiveReportMessages();
     } catch (e) {
       _hasConnectionIssue = true;
       _error = e.toString();
-      _messages.add(Message(
-        id: '${DateTime.now().millisecondsSinceEpoch}_err',
-        reportId: reportId,
-        senderId: 'system',
-        senderType: 'system',
-        content: 'Pasensya na, may error sa koneksyon. Subukan ulit.',
-        timestamp: DateTime.now(),
-        messageType: 'system',
-      ));
+      _messages.add(
+        Message(
+          id: '${DateTime.now().millisecondsSinceEpoch}_err',
+          reportId: reportId,
+          senderId: 'system',
+          senderType: 'system',
+          content: 'Pasensya na, may error sa koneksyon. Subukan ulit.',
+          timestamp: DateTime.now(),
+          messageType: 'system',
+        ),
+      );
       await _persistActiveReportMessages();
     } finally {
       _isTyping = false;
@@ -290,20 +307,42 @@ class MessagesProvider with ChangeNotifier {
 
       final reportId = result['report_id'] as String?;
       if (reportId != null) {
+        final remappedHistory = _messages
+            .map(
+              (m) => Message(
+                id: m.id,
+                reportId: reportId,
+                senderId: m.senderId,
+                senderType: m.senderType,
+                content: m.content,
+                messageType: m.messageType,
+                imageUrl: m.imageUrl,
+                timestamp: m.timestamp,
+              ),
+            )
+            .toList();
+
+        _messages = remappedHistory;
+        _activeReportId = reportId;
+
         _pendingReportData = null;
         _sessionId = null;
         _capturedLat = null;
         _capturedLng = null;
 
-        _messages.add(Message(
-          id: '${DateTime.now().millisecondsSinceEpoch}_saved',
-          reportId: reportId,
-          senderId: 'system',
-          senderType: 'system',
-          content: '📋 Report saved! ID: $reportId',
-          timestamp: DateTime.now(),
-          messageType: 'system',
-        ));
+        _messages.add(
+          Message(
+            id: '${DateTime.now().millisecondsSinceEpoch}_saved',
+            reportId: reportId,
+            senderId: 'system',
+            senderType: 'system',
+            content: '📋 Report saved! ID: $reportId',
+            timestamp: DateTime.now(),
+            messageType: 'system',
+          ),
+        );
+
+        await OfflineStoreService.saveReportMessages(reportId, _messages);
       }
       return reportId;
     } catch (e) {
@@ -339,24 +378,27 @@ class MessagesProvider with ChangeNotifier {
   // ── Real-time ─────────────────────────────────────────────────────────────
   void subscribeToMessages(String reportId) {
     _messagesSubscription?.cancel();
-    _messagesSubscription =
-      _subscribeMessagesApi(reportId).listen((data) {
-      final incoming = data.map((json) => Message.fromJson(json)).toList();
-      for (final msg in incoming) {
-        _mergeIncomingMessage(msg);
-      }
-      _hasConnectionIssue = false;
-      _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-      _persistActiveReportMessages();
-      notifyListeners();
-    }, onError: (Object e) {
-      _hasConnectionIssue = true;
-      _error = 'Realtime disconnected. Subukang i-retry ang queued messages.';
-      notifyListeners();
-    }, onDone: () {
-      _hasConnectionIssue = true;
-      notifyListeners();
-    });
+    _messagesSubscription = _subscribeMessagesApi(reportId).listen(
+      (data) {
+        final incoming = data.map((json) => Message.fromJson(json)).toList();
+        for (final msg in incoming) {
+          _mergeIncomingMessage(msg);
+        }
+        _hasConnectionIssue = false;
+        _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        _persistActiveReportMessages();
+        notifyListeners();
+      },
+      onError: (Object e) {
+        _hasConnectionIssue = true;
+        _error = 'Realtime disconnected. Subukang i-retry ang queued messages.';
+        notifyListeners();
+      },
+      onDone: () {
+        _hasConnectionIssue = true;
+        notifyListeners();
+      },
+    );
   }
 
   void unsubscribeFromMessages() {
