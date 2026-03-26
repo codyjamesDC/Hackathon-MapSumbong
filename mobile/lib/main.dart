@@ -19,6 +19,7 @@ import 'screens/chat/chat_screen.dart';
 import 'screens/chat/chats_home_screen.dart';
 import 'screens/map/map_screen.dart';
 import 'screens/location/location_picker_screen.dart';
+import 'screens/emergency/emergency_hotline_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/navigation/main_navigation_shell.dart';
 import 'theme/app_theme.dart';
@@ -174,6 +175,10 @@ GoRouter _buildRouter() {
           final reportId = state.pathParameters['reportId']!;
           return ChatScreen(reportId: reportId);
         },
+      ),
+      GoRoute(
+        path: '/emergency',
+        builder: (context, state) => const EmergencyHotlineScreen(),
       ),
       // Location picker — navigated to imperatively via Navigator.push
       // so it can return a LatLng value back to the caller

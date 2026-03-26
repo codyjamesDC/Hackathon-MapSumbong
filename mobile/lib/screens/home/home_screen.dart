@@ -100,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   onCreateReport: _startNewReport,
                   onOpenMap: () => context.go('/map'),
                   onOpenReports: () => context.push('/reports'),
-                  onCallEmergencyHotline: () => _callHotline('117'),
+                  onCallEmergencyHotline: () => context.push('/emergency'),
                   onCallNationalEmergency: () => _callHotline('911'),
                 ),
               ),
