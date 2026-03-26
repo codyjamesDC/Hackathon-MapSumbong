@@ -17,6 +17,31 @@ const headers = {
   'Content-Type': 'application/json'
 };
 
+function hasText(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function buildResolutionState(row) {
+  const status = String(row.status || '').toLowerCase();
+  const resolved = status === 'resolved';
+  const resolutionNote = hasText(row.resolution_note)
+    ? row.resolution_note.trim()
+    : '';
+  const resolutionPhotoUrl = hasText(row.resolution_photo_url)
+    ? row.resolution_photo_url.trim()
+    : '';
+  const resolutionComplete =
+    resolved && hasText(resolutionNote) && hasText(resolutionPhotoUrl);
+
+  return {
+    resolved,
+    resolutionNote,
+    resolutionPhotoUrl,
+    resolutionComplete,
+    resolutionPendingProof: resolved && !resolutionComplete,
+  };
+}
+
 /**
  * Fetch all incidents from Supabase
  * Maps Supabase row schema → MapSumbong incident object
@@ -34,27 +59,54 @@ export async function fetchIncidents() {
 /**
  * Resolve an incident — updates Supabase and triggers SMS via Edge Function
  */
-export async function resolveIncident(id) {
+export async function resolveIncident(
+  id,
+  {
+    resolutionNote = '',
+    resolutionPhotoUrl = '',
+    updatedBy = 'barangay_official',
+  } = {}
+) {
   if (!SUPABASE_URL) return;
+
+  const payload = { status: 'resolved' };
+  if (hasText(resolutionNote)) {
+    payload.resolution_note = resolutionNote.trim();
+  }
+  if (hasText(resolutionPhotoUrl)) {
+    payload.resolution_photo_url = resolutionPhotoUrl.trim();
+  }
+  if (hasText(updatedBy)) {
+    payload.updated_by = updatedBy.trim();
+  }
 
   const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/reports?id=eq.${id}`, {
     method: 'PATCH',
-    headers,
-    body: JSON.stringify({ status: 'resolved'})
+    headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify(payload)
   });
   if (!updateRes.ok) {
     throw new Error(`Failed to resolve incident ${id}`);
   }
 
-  // Trigger Edge Function to send resolution SMS to reporter
-  const smsRes = await fetch(`${SUPABASE_URL}/functions/v1/send-resolution-sms`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ incident_id: id })
-  });
-  if (!smsRes.ok) {
-    throw new Error(`Resolved but SMS trigger failed for ${id}`);
+  const updatedRows = await updateRes.json().catch(() => []);
+  const updatedRow = Array.isArray(updatedRows) && updatedRows.length
+    ? updatedRows[0]
+    : null;
+
+  // Only send completion SMS when full closure proof is present.
+  if (hasText(payload.resolution_note) && hasText(payload.resolution_photo_url)) {
+    const smsRes = await fetch(`${SUPABASE_URL}/functions/v1/send-resolution-sms`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ incident_id: id })
+    });
+    if (!smsRes.ok) {
+      throw new Error(`Resolved but SMS trigger failed for ${id}`);
+    }
   }
+
+  return updatedRow ? mapRow(updatedRow) : null;
 }
 
 /**
@@ -121,28 +173,110 @@ function deriveCategory(issueType) {
   return map[issueType] || 'other';
 }
 
+function prettifyIssueType(issueType) {
+  if (!issueType) return 'Community Report';
+  return String(issueType)
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function buildAiFallback({ severity, category, barangay }) {
+  const sev = String(severity || 'medium');
+  const brgy = barangay || 'the reported area';
+  const guidance = {
+    flood: 'Potential flood-prone condition detected from community submission.',
+    fire: 'Possible fire-related incident that needs rapid validation.',
+    medical: 'Potential medical emergency requiring timely triage.',
+    infrastructure: 'Possible public infrastructure issue requiring inspection.',
+    waste: 'Possible sanitation-related hazard requiring barangay action.',
+    other: 'Incident submitted and queued for barangay verification.'
+  };
+  return `${guidance[category] || guidance.other} Severity tagged as ${sev} in ${brgy}.`;
+}
+
+function buildActionFallback({ severity, category }) {
+  if (severity === 'critical' || severity === 'high') {
+    return 'Stay clear of the area and wait for responder instructions. Contact emergency services if conditions worsen.';
+  }
+  if (category === 'waste' || category === 'infrastructure') {
+    return 'Avoid the affected spot and coordinate with barangay officials for safe temporary routing.';
+  }
+  return 'Exercise caution near the reported location and monitor official barangay updates.';
+}
+
+function normalizeAuthorities(row, category) {
+  if (Array.isArray(row.notified_authorities) && row.notified_authorities.length > 0) {
+    return row.notified_authorities;
+  }
+
+  if (typeof row.notified_authorities === 'string' && row.notified_authorities.trim()) {
+    return row.notified_authorities
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean);
+  }
+
+  const defaults = {
+    flood: ['MDRRMO', 'Barangay Captain'],
+    fire: ['BFP', 'Barangay Captain'],
+    medical: ['MDRRMO', 'Health Unit'],
+    infrastructure: ['Municipal Engineering', 'Barangay Captain'],
+    waste: ['Barangay Captain', 'Sanitation Team'],
+    other: ['Barangay Captain']
+  };
+
+  return defaults[category] || defaults.other;
+}
+
+function normalizeLocationText(row, barangay) {
+  const candidates = [
+    row.location_text,
+    row.location,
+    row.address,
+    row.street,
+    row.street_name,
+    row.nearby_street,
+    row.landmark
+  ];
+
+  const found = candidates.find(v => typeof v === 'string' && v.trim());
+  if (found) return found.trim();
+
+  return `Near a local street in ${barangay || 'the reported barangay'}`;
+}
+
 /**
  * Maps a Supabase DB row to the MapSumbong incident schema
  * Adjust field names to match your actual Supabase table columns
  */
 function mapRow(row) {
+  const category = deriveCategory(row.issue_type);
+  const severity = row.urgency || 'medium';
+  const barangay = row.barangay || 'Unknown Barangay';
+  const locationText = normalizeLocationText(row, barangay);
+  const resolutionState = buildResolutionState(row);
+
   return {
     id: row.id,
-    type: row.issue_type || 'Unknown',
-    category: deriveCategory(row.issue_type),
-    severity: row.urgency || 'medium',
-    barangay: row.barangay || 'Unknown Barangay',
-    location: row.location_text || '',
+    type: prettifyIssueType(row.issue_type),
+    category,
+    severity,
+    barangay,
+    location: locationText,
     lat: parseFloat(row.latitude) || 14.6,
     lng: parseFloat(row.longitude) || 121.0,
-    reports: 1,
+    reports: Number(row.report_count || row.reports || 1),
     time: formatTime(row.created_at),
-    channel: 'App',
-    description: row.description || '',
-    ai: '',
-    action: '',
-    authorities: [],
-    resolved: row.status === 'resolved',
+    channel: row.channel || 'App',
+    description: row.description || 'No additional details were provided by the reporter.',
+    ai: row.ai_assessment || row.ai || buildAiFallback({ severity, category, barangay }),
+    action: row.immediate_action || row.action || buildActionFallback({ severity, category }),
+    authorities: normalizeAuthorities(row, category),
+    resolved: resolutionState.resolved,
+    resolutionNote: resolutionState.resolutionNote,
+    resolutionPhotoUrl: resolutionState.resolutionPhotoUrl,
+    resolutionComplete: resolutionState.resolutionComplete,
+    resolutionPendingProof: resolutionState.resolutionPendingProof,
     radius: 150,
   };
 }

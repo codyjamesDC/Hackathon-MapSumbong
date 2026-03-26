@@ -54,9 +54,13 @@
         <svg width="10" height="10" viewBox="0 0 24 24" fill="#ff8c00"><circle cx="12" cy="12" r="10"/></svg>
         {$stats.open} Open
       </div>
+      <div class="chip yellow">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="#f5c800"><circle cx="12" cy="12" r="10"/></svg>
+        {$stats.pendingProof} Pending Proof
+      </div>
       <div class="chip green">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00c896" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-        {$stats.resolved} Resolved
+        {$stats.completed} Completed
       </div>
     </div>
     <button class="disaster-btn" class:active={$disasterMode} on:click={toggleDisaster}>
@@ -152,6 +156,7 @@
   }
   .chip.red { color: #ff4560; }
   .chip.amber { color: #ff8c00; }
+  .chip.yellow { color: #f5c800; }
   .chip.green { color: #00c896; }
 
   .disaster-btn {

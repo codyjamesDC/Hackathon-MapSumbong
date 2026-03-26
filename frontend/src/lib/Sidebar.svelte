@@ -1,5 +1,6 @@
 <script>
   import { incidents, selectedIncident, activeFilter, toastMsg, stats } from './store.js';
+  import { resolveIncident } from './api.js';
 
   let search = '';
   let tab = 'incidents';
@@ -32,6 +33,28 @@
     other:`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`
   };
 
+  let showResolveModal = false;
+  let resolvingIncident = null;
+  let resolutionNote = '';
+  let resolutionPhotoUrl = '';
+  let isSavingResolution = false;
+
+  function hasText(value) {
+    return typeof value === 'string' && value.trim().length > 0;
+  }
+
+  function isResolutionComplete(inc) {
+    if (!inc?.resolved) return false;
+    if (typeof inc.resolutionComplete === 'boolean') {
+      return inc.resolutionComplete;
+    }
+    return hasText(inc.resolutionNote) && hasText(inc.resolutionPhotoUrl);
+  }
+
+  function isResolutionPendingProof(inc) {
+    return Boolean(inc?.resolved) && !isResolutionComplete(inc);
+  }
+
   $: filtered = $incidents.filter(i => {
     const fk = $activeFilter.toLowerCase();
     const fMatch = fk==='all'?true : fk==='open'?!i.resolved : i.severity===fk;
@@ -55,11 +78,68 @@
     a[i.barangay].count++; if(i.severity==='critical') a[i.barangay].critical++; return a;
   },{});
 
-  function resolve(inc, e) {
-    e.stopPropagation();
-    incidents.update(l => l.map(i => i.id===inc.id ? {...i,resolved:true} : i));
-    if ($selectedIncident?.id===inc.id) selectedIncident.set(null);
-    toastMsg.set('Resolved. SMS confirmation sent to reporter.');
+  function openResolveModal(inc, e) {
+    if (e?.stopPropagation) e.stopPropagation();
+    resolvingIncident = inc;
+    resolutionNote = inc?.resolutionNote || '';
+    resolutionPhotoUrl = inc?.resolutionPhotoUrl || '';
+    showResolveModal = true;
+  }
+
+  function closeResolveModal() {
+    if (isSavingResolution) return;
+    showResolveModal = false;
+    resolvingIncident = null;
+    resolutionNote = '';
+    resolutionPhotoUrl = '';
+  }
+
+  async function submitResolution() {
+    if (!resolvingIncident || isSavingResolution) return;
+    isSavingResolution = true;
+
+    try {
+      const updated = await resolveIncident(resolvingIncident.id, {
+        resolutionNote,
+        resolutionPhotoUrl,
+      });
+
+      const fallbackResolved = {
+        ...resolvingIncident,
+        resolved: true,
+        resolutionNote: hasText(resolutionNote) ? resolutionNote.trim() : '',
+        resolutionPhotoUrl: hasText(resolutionPhotoUrl)
+          ? resolutionPhotoUrl.trim()
+          : '',
+      };
+      const fallbackComplete =
+        hasText(fallbackResolved.resolutionNote) &&
+        hasText(fallbackResolved.resolutionPhotoUrl);
+      fallbackResolved.resolutionComplete = fallbackComplete;
+      fallbackResolved.resolutionPendingProof = !fallbackComplete;
+
+      const merged = updated || fallbackResolved;
+
+      incidents.update((list) =>
+        list.map((i) => (i.id === resolvingIncident.id ? { ...i, ...merged } : i))
+      );
+
+      if ($selectedIncident?.id === resolvingIncident.id) {
+        selectedIncident.set({ ...$selectedIncident, ...merged });
+      }
+
+      if (merged.resolutionPendingProof) {
+        toastMsg.set('Marked as resolved. Pending written report and photo evidence.');
+      } else {
+        toastMsg.set('Resolved and fully completed with written report + evidence.');
+      }
+
+      closeResolveModal();
+    } catch (err) {
+      toastMsg.set(err?.message || 'Failed to update report status.');
+    } finally {
+      isSavingResolution = false;
+    }
   }
 </script>
 
@@ -83,7 +163,7 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#404050" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       <input bind:value={search} placeholder="Search..." />
       {#if search}
-        <button class="clr" on:click={()=>search=''}>
+        <button class="clr" on:click={()=>search=''} aria-label="Clear search">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       {/if}
@@ -120,7 +200,8 @@
         <div
           class="row"
           class:active={$selectedIncident?.id===inc.id}
-          class:resolved={inc.resolved}
+          class:resolved={inc.resolved && !isResolutionPendingProof(inc)}
+          class:pending-proof={isResolutionPendingProof(inc)}
           on:click={()=>selectedIncident.set(inc)}
           role="button"
           tabindex="0"
@@ -130,7 +211,12 @@
           <div class="avatar" style="background:{AVG_BG[inc.category]};color:{sev.color}">
             <div class="avatar-svg">{@html CAT_SVG[inc.category]||CAT_SVG.other}</div>
             <!-- Green dot for open, grey for resolved -->
-            <div class="status-dot" class:open={!inc.resolved} class:done={inc.resolved}></div>
+            <div
+              class="status-dot"
+              class:open={!inc.resolved}
+              class:pending={isResolutionPendingProof(inc)}
+              class:done={inc.resolved && !isResolutionPendingProof(inc)}
+            ></div>
           </div>
 
           <!-- Main content -->
@@ -143,6 +229,9 @@
             <div class="row-meta">
               <span style="color:{sev.color};font-weight:700;">{inc.reports}</span>
               <span>reports · {inc.time}</span>
+              {#if isResolutionPendingProof(inc)}
+                <span class="proof-pill">pending proof</span>
+              {/if}
             </div>
           </div>
 
@@ -153,9 +242,16 @@
             </button>
             <button
               class="act-btn"
-              class:resolved={inc.resolved}
-              title={inc.resolved ? 'Already resolved' : 'Mark resolved'}
-              on:click={(e)=>!inc.resolved&&resolve(inc,e)}
+              class:resolved={isResolutionComplete(inc)}
+              class:pending={isResolutionPendingProof(inc)}
+              title={
+                isResolutionComplete(inc)
+                  ? 'Already fully completed'
+                  : isResolutionPendingProof(inc)
+                    ? 'Add written report and evidence'
+                    : 'Mark resolved'
+              }
+              on:click={(e)=>!isResolutionComplete(inc)&&openResolveModal(inc,e)}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
             </button>
@@ -193,6 +289,56 @@
     </div>
   {/if}
 </aside>
+
+{#if showResolveModal && resolvingIncident}
+  <div
+    class="resolve-overlay"
+    role="button"
+    tabindex="0"
+    aria-label="Close resolution form"
+    on:click|self={closeResolveModal}
+    on:keydown={(e) => (e.key === 'Escape' || e.key === 'Enter') && closeResolveModal()}
+  >
+    <div class="resolve-modal">
+      <h3>Mark as resolved</h3>
+      <p>
+        Pwede i-mark as resolved ngayon. Para fully completed,
+        kailangan ang written report at photo evidence.
+      </p>
+
+      <label for="resolution-note">Written report</label>
+      <textarea
+        id="resolution-note"
+        bind:value={resolutionNote}
+        rows="3"
+        placeholder="Halimbawa: Natapos ang clearing, nalinis ang kanal, at na-verify ng barangay team."
+      ></textarea>
+
+      <label for="resolution-photo-url">Photo evidence URL</label>
+      <input
+        id="resolution-photo-url"
+        type="url"
+        bind:value={resolutionPhotoUrl}
+        placeholder="https://..."
+      />
+
+      {#if !resolutionNote.trim() || !resolutionPhotoUrl.trim()}
+        <div class="resolve-hint">
+          Resolved lang muna ito. Pending proof pa hanggang may written report at photo evidence.
+        </div>
+      {/if}
+
+      <div class="resolve-actions">
+        <button type="button" class="btn ghost" on:click={closeResolveModal} disabled={isSavingResolution}>
+          Cancel
+        </button>
+        <button type="button" class="btn primary" on:click={submitResolution} disabled={isSavingResolution}>
+          {isSavingResolution ? 'Saving...' : 'Save Status'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .sidebar {
@@ -292,6 +438,7 @@
   .row:hover { background: rgba(255,255,255,0.04); }
   .row.active { background: rgba(0,200,150,0.06); border-color: rgba(0,200,150,0.18); }
   .row.resolved { opacity: 0.4; }
+  .row.pending-proof { opacity: 1; border-color: rgba(245,200,0,0.22); }
 
   /* Circular avatar — key reference match */
   .avatar {
@@ -307,6 +454,7 @@
     border: 1.5px solid rgba(10,10,16,0.9);
   }
   .status-dot.open { background: #00c896; }
+  .status-dot.pending { background: #f5c800; }
   .status-dot.done { background: #303040; }
 
   .row-body { flex: 1; min-width: 0; }
@@ -315,6 +463,16 @@
   .row-sev { font-size: 10px; font-weight: 600; text-transform: capitalize; flex-shrink: 0; }
   .row-sub { font-size: 11px; color: #404050; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .row-meta { font-size: 10px; color: #303040; display: flex; gap: 4px; align-items: center; }
+  .proof-pill {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #f5c800;
+    background: rgba(245,200,0,0.14);
+    border: 1px solid rgba(245,200,0,0.28);
+    border-radius: 999px;
+    padding: 1px 6px;
+  }
 
   /* Two action buttons on right — matches reference screenshot */
   .row-actions { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
@@ -328,6 +486,91 @@
   }
   .act-btn:hover { background: rgba(255,255,255,0.1); color: #c0c0d0; }
   .act-btn.resolved { color: #00c896; background: rgba(0,200,150,0.1); border-color: rgba(0,200,150,0.2); }
+  .act-btn.pending { color: #f5c800; background: rgba(245,200,0,0.1); border-color: rgba(245,200,0,0.24); }
+
+  .resolve-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1300;
+    background: rgba(0, 0, 0, 0.58);
+    display: grid;
+    place-items: center;
+  }
+  .resolve-modal {
+    width: min(500px, calc(100vw - 32px));
+    background: #101018;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 16px;
+    display: grid;
+    gap: 10px;
+  }
+  .resolve-modal h3 {
+    margin: 0;
+    color: #e9e9f5;
+    font-size: 16px;
+  }
+  .resolve-modal p {
+    margin: 0;
+    color: #b9b9cc;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .resolve-modal label {
+    color: #d3d3e3;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .resolve-modal textarea,
+  .resolve-modal input {
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: #ececf8;
+    border-radius: 10px;
+    padding: 10px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+  }
+  .resolve-modal textarea { resize: vertical; min-height: 78px; }
+  .resolve-modal textarea:focus,
+  .resolve-modal input:focus {
+    outline: none;
+    border-color: rgba(0, 200, 150, 0.5);
+  }
+  .resolve-hint {
+    color: #f5c800;
+    background: rgba(245, 200, 0, 0.1);
+    border: 1px solid rgba(245, 200, 0, 0.25);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .resolve-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 2px;
+  }
+  .btn {
+    border-radius: 9px;
+    border: 1px solid transparent;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn.ghost {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #d9d9e8;
+  }
+  .btn.primary {
+    background: #00c896;
+    color: #062117;
+  }
+  .btn:disabled { opacity: 0.65; cursor: not-allowed; }
 
   .empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 20px; color: #303040; font-size: 12px; }
 

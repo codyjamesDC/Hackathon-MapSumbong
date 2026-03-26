@@ -1,5 +1,6 @@
 <script>
   import { selectedIncident, incidents, toastMsg } from './store.js';
+  import { resolveIncident } from './api.js';
 
   const SEV = {
     critical: { color:'#ff4560', bg:'rgba(255,69,96,0.1)' },
@@ -17,17 +18,100 @@
     other: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`
   };
 
+  let showResolveModal = false;
+  let resolutionNote = '';
+  let resolutionPhotoUrl = '';
+  let isSavingResolution = false;
+
+  function hasText(value) {
+    return typeof value === 'string' && value.trim().length > 0;
+  }
+
+  function isResolutionComplete(item) {
+    if (!item?.resolved) return false;
+    if (typeof item.resolutionComplete === 'boolean') {
+      return item.resolutionComplete;
+    }
+    return hasText(item.resolutionNote) && hasText(item.resolutionPhotoUrl);
+  }
+
+  function isResolutionPendingProof(item) {
+    return Boolean(item?.resolved) && !isResolutionComplete(item);
+  }
+
   $: inc = $selectedIncident;
   $: sev = inc ? SEV[inc.severity] : null;
+  $: aiText = inc?.ai && String(inc.ai).trim()
+    ? inc.ai
+    : 'Assessment is being generated from current report context.';
+  $: actionText = inc?.action && String(inc.action).trim()
+    ? inc.action
+    : 'Follow barangay advisories while response teams validate this report.';
+  $: authorityList = Array.isArray(inc?.authorities) && inc.authorities.length > 0
+    ? inc.authorities
+    : ['Barangay Captain'];
+  $: nearAddress = inc?.location && String(inc.location).trim()
+    ? inc.location
+    : `Near a local street in ${inc?.barangay || 'the reported barangay'}`;
+  $: isPendingProof = isResolutionPendingProof(inc);
 
   function close(e) {
     if (e?.stopPropagation) e.stopPropagation();
     selectedIncident.set(null);
   }
-  function resolve() {
-    incidents.update(l => l.map(i => i.id === inc.id ? {...i, resolved:true} : i));
-    toastMsg.set('Resolved. SMS confirmation sent to reporter.');
-    selectedIncident.set(null);
+  function openResolveModal() {
+    resolutionNote = inc?.resolutionNote || '';
+    resolutionPhotoUrl = inc?.resolutionPhotoUrl || '';
+    showResolveModal = true;
+  }
+
+  function closeResolveModal() {
+    if (isSavingResolution) return;
+    showResolveModal = false;
+  }
+
+  async function saveResolution() {
+    if (!inc || isSavingResolution) return;
+    isSavingResolution = true;
+
+    try {
+      const updated = await resolveIncident(inc.id, {
+        resolutionNote,
+        resolutionPhotoUrl,
+      });
+
+      const fallback = {
+        ...inc,
+        resolved: true,
+        resolutionNote: hasText(resolutionNote) ? resolutionNote.trim() : '',
+        resolutionPhotoUrl: hasText(resolutionPhotoUrl)
+          ? resolutionPhotoUrl.trim()
+          : '',
+      };
+      const fallbackComplete =
+        hasText(fallback.resolutionNote) && hasText(fallback.resolutionPhotoUrl);
+      fallback.resolutionComplete = fallbackComplete;
+      fallback.resolutionPendingProof = !fallbackComplete;
+
+      const merged = updated || fallback;
+
+      incidents.update((list) =>
+        list.map((i) => (i.id === inc.id ? { ...i, ...merged } : i))
+      );
+      selectedIncident.set({ ...inc, ...merged });
+
+      if (merged.resolutionPendingProof) {
+        toastMsg.set('Resolved status saved. Pending written report and photo evidence.');
+      } else {
+        toastMsg.set('Resolved and fully completed with written report + evidence.');
+      }
+
+      showResolveModal = false;
+    } catch (err) {
+      toastMsg.set(err?.message || 'Failed to update report status.');
+    } finally {
+      isSavingResolution = false;
+    }
   }
 </script>
 
@@ -42,7 +126,7 @@
         <div class="card-title">{inc.type}</div>
         <div class="card-sub">{inc.barangay}</div>
       </div>
-      <button class="close-btn" on:click|stopPropagation={close}>
+      <button class="close-btn" on:click|stopPropagation={close} aria-label="Close details panel">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
@@ -52,7 +136,11 @@
       <div class="pill" style="background:{sev.bg};color:{sev.color}">{inc.severity}</div>
       <div class="pill ch">{inc.channel}</div>
       <div class="pill tm">{inc.time}</div>
-      {#if inc.resolved}<div class="pill res">✓ resolved</div>{/if}
+      {#if inc.resolved && isPendingProof}
+        <div class="pill proof">resolved - pending proof</div>
+      {:else if inc.resolved}
+        <div class="pill res">✓ resolved</div>
+      {/if}
     </div>
 
     <!-- Report count -->
@@ -86,41 +174,104 @@
           <svg width="10" height="10" viewBox="0 0 24 24" fill="#00c896"><circle cx="12" cy="12" r="10"/></svg>
           AI assessment
         </div>
-        <div class="ai-box">{inc.ai}</div>
+        <div class="ai-box">{aiText}</div>
       </div>
 
       <div class="sec">
         <div class="sec-label">Sent to reporter</div>
-        <div class="action-box">{inc.action}</div>
+        <div class="action-box">{actionText}</div>
       </div>
 
       <div class="sec">
         <div class="sec-label">Authorities notified</div>
         <div class="auth-row">
-          {#each inc.authorities as a}
+          {#each authorityList as a}
             <span class="auth-tag">{a}</span>
           {/each}
         </div>
       </div>
 
       <div class="sec">
-        <div class="sec-label">Coordinates</div>
-        <div class="coords">{inc.lat.toFixed(4)}°N, {inc.lng.toFixed(4)}°E</div>
+        <div class="sec-label">Address near report</div>
+        <div class="coords">{nearAddress}</div>
       </div>
+
+      {#if inc.resolved}
+        <div class="sec">
+          <div class="sec-label">Resolution status</div>
+          <div class="status-note" class:pending={isPendingProof}>
+            {#if isPendingProof}
+              Marked as resolved, pero kulang pa ang written report at photo evidence para fully completed.
+            {:else}
+              Fully completed with written report and photo evidence.
+            {/if}
+          </div>
+        </div>
+      {/if}
     </div>
 
     <div class="card-footer">
-      {#if !inc.resolved}
-        <button class="resolve-btn" on:click={resolve}>
+      {#if !inc.resolved || isPendingProof}
+        <button class="resolve-btn" class:pending={isPendingProof} on:click={openResolveModal}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-          Mark as Resolved
+          {isPendingProof ? 'Add Proof to Complete' : 'Mark as Resolved'}
         </button>
       {:else}
         <div class="resolved-row">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00c896" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
-          Report resolved
+          Report fully completed
         </div>
       {/if}
+    </div>
+  </div>
+{/if}
+
+{#if showResolveModal && inc}
+  <div
+    class="resolve-overlay"
+    role="button"
+    tabindex="0"
+    aria-label="Close resolution form"
+    on:click|self={closeResolveModal}
+    on:keydown={(e) => (e.key === 'Escape' || e.key === 'Enter') && closeResolveModal()}
+  >
+    <div class="resolve-modal">
+      <h3>Resolve Incident</h3>
+      <p>
+        Pwede i-save as resolved ngayon. Para fully completed,
+        kailangan ang written report at photo evidence.
+      </p>
+
+      <label for="detail-resolution-note">Written report</label>
+      <textarea
+        id="detail-resolution-note"
+        bind:value={resolutionNote}
+        rows="3"
+        placeholder="Halimbawa: Cleanup completed and validated by barangay staff."
+      ></textarea>
+
+      <label for="detail-resolution-photo-url">Photo evidence URL</label>
+      <input
+        id="detail-resolution-photo-url"
+        type="url"
+        bind:value={resolutionPhotoUrl}
+        placeholder="https://..."
+      />
+
+      {#if !resolutionNote.trim() || !resolutionPhotoUrl.trim()}
+        <div class="resolve-hint">
+          Ito ay mase-save as resolved pero pending proof pa.
+        </div>
+      {/if}
+
+      <div class="resolve-actions">
+        <button type="button" class="btn ghost" on:click={closeResolveModal} disabled={isSavingResolution}>
+          Cancel
+        </button>
+        <button type="button" class="btn primary" on:click={saveResolution} disabled={isSavingResolution}>
+          {isSavingResolution ? 'Saving...' : 'Save Status'}
+        </button>
+      </div>
     </div>
   </div>
 {/if}
@@ -173,6 +324,12 @@
   .pill.ch { background: rgba(124,134,255,0.12); color: #7c86ff; }
   .pill.tm { color: #404050; }
   .pill.res { background: rgba(0,200,150,0.1); color: #00c896; }
+  .pill.proof {
+    background: rgba(245,200,0,0.12);
+    color: #f5c800;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
 
   .count-row {
     margin: 0 14px 10px;
@@ -205,6 +362,20 @@
   .auth-row { display: flex; flex-wrap: wrap; gap: 4px; }
   .auth-tag { font-size: 11px; padding: 3px 9px; border-radius: 6px; background: rgba(124,134,255,0.1); color: #7c86ff; }
   .coords { font-size: 11px; color: #505060; font-family: monospace; background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 6px; }
+  .status-note {
+    font-size: 11px;
+    color: #00c896;
+    background: rgba(0,200,150,0.08);
+    border: 1px solid rgba(0,200,150,0.2);
+    border-radius: 8px;
+    padding: 8px 10px;
+    line-height: 1.45;
+  }
+  .status-note.pending {
+    color: #f5c800;
+    background: rgba(245,200,0,0.09);
+    border-color: rgba(245,200,0,0.24);
+  }
 
   .card-footer { padding: 12px 14px; border-top: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; }
   .resolve-btn {
@@ -218,5 +389,96 @@
   }
   .resolve-btn:hover { background: #00b584; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,200,150,0.3); }
   .resolve-btn:active { transform: none; box-shadow: none; }
+  .resolve-btn.pending {
+    background: #f5c800;
+    color: #241d00;
+  }
+  .resolve-btn.pending:hover {
+    background: #deba00;
+    box-shadow: 0 4px 16px rgba(245,200,0,0.25);
+  }
   .resolved-row { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: #00c896; padding: 8px; }
+
+  .resolve-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    background: rgba(0,0,0,0.58);
+    display: grid;
+    place-items: center;
+  }
+  .resolve-modal {
+    width: min(500px, calc(100vw - 32px));
+    background: #101018;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 16px;
+    display: grid;
+    gap: 10px;
+  }
+  .resolve-modal h3 {
+    margin: 0;
+    color: #e9e9f5;
+    font-size: 16px;
+  }
+  .resolve-modal p {
+    margin: 0;
+    color: #b9b9cc;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .resolve-modal label {
+    color: #d3d3e3;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .resolve-modal textarea,
+  .resolve-modal input {
+    width: 100%;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.04);
+    color: #ececf8;
+    border-radius: 10px;
+    padding: 10px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+  }
+  .resolve-modal textarea { resize: vertical; min-height: 78px; }
+  .resolve-modal textarea:focus,
+  .resolve-modal input:focus {
+    outline: none;
+    border-color: rgba(0,200,150,0.5);
+  }
+  .resolve-hint {
+    color: #f5c800;
+    background: rgba(245,200,0,0.1);
+    border: 1px solid rgba(245,200,0,0.25);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .resolve-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .btn {
+    border-radius: 9px;
+    border: 1px solid transparent;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn.ghost {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.14);
+    color: #d9d9e8;
+  }
+  .btn.primary {
+    background: #00c896;
+    color: #062117;
+  }
+  .btn:disabled { opacity: 0.65; cursor: not-allowed; }
 </style>

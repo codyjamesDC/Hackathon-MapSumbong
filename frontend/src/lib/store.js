@@ -1,5 +1,20 @@
 import { writable, derived } from 'svelte/store';
 
+function hasText(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isResolutionComplete(incident) {
+  if (!incident?.resolved) return false;
+  if (typeof incident.resolutionComplete === 'boolean') {
+    return incident.resolutionComplete;
+  }
+  return (
+    hasText(incident.resolutionNote) &&
+    hasText(incident.resolutionPhotoUrl)
+  );
+}
+
 export const disasterMode = writable(false);
 export const selectedIncident = writable(null);
 export const toastMsg = writable('');
@@ -118,6 +133,10 @@ export const incidents = writable([
     action: 'Huwag lapitan ang wire. Makipag-ugnayan sa Meralco: 16211.',
     authorities: ['Barangay Captain', 'MDRRMO'],
     resolved: true,
+    resolutionNote: 'Meralco isolated and repaired the line. Safety cones removed after clearance.',
+    resolutionPhotoUrl: 'https://example.com/resolution/lalakay-line-repair.jpg',
+    resolutionComplete: true,
+    resolutionPendingProof: false,
     radius: 150
   }
 ]);
@@ -126,6 +145,8 @@ export const stats = derived(incidents, $incidents => ({
   critical: $incidents.filter(i => i.severity === 'critical' && !i.resolved).length,
   open: $incidents.filter(i => !i.resolved).length,
   resolved: $incidents.filter(i => i.resolved).length,
+  completed: $incidents.filter(i => isResolutionComplete(i)).length,
+  pendingProof: $incidents.filter(i => i.resolved && !isResolutionComplete(i)).length,
   total: $incidents.length
 }));
 

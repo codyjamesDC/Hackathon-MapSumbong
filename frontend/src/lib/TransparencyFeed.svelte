@@ -18,10 +18,28 @@
     other:`<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`
   };
 
+  function hasText(value) {
+    return typeof value === 'string' && value.trim().length > 0;
+  }
+
+  function isResolutionComplete(inc) {
+    if (!inc?.resolved) return false;
+    if (typeof inc.resolutionComplete === 'boolean') {
+      return inc.resolutionComplete;
+    }
+    return hasText(inc.resolutionNote) && hasText(inc.resolutionPhotoUrl);
+  }
+
+  function isResolutionPendingProof(inc) {
+    return Boolean(inc?.resolved) && !isResolutionComplete(inc);
+  }
+
   $: sorted = [...$incidents].sort((a,b) => b.id - a.id);
   $: resolved = $incidents.filter(i => i.resolved).length;
+  $: completed = $incidents.filter(i => isResolutionComplete(i)).length;
+  $: pendingProof = $incidents.filter(i => isResolutionPendingProof(i)).length;
   $: open_count = $incidents.filter(i => !i.resolved).length;
-  $: rate = $incidents.length ? Math.round(resolved/$incidents.length*100) : 0;
+  $: rate = $incidents.length ? Math.round(completed/$incidents.length*100) : 0;
 </script>
 
 {#if open}
@@ -33,7 +51,7 @@
           <span class="modal-title">Public Transparency Feed</span>
         </div>
         <p class="modal-sub">All verified community reports — publicly visible, no login required</p>
-        <button class="close-btn" on:click={() => open=false}>
+        <button class="close-btn" on:click={() => open=false} aria-label="Close transparency feed">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>
@@ -48,19 +66,23 @@
           <div class="stat-l">Open</div>
         </div>
         <div class="stat-box">
-          <div class="stat-n" style="color:#00c896">{resolved}</div>
-          <div class="stat-l">Resolved</div>
+          <div class="stat-n" style="color:#f5c800">{pendingProof}</div>
+          <div class="stat-l">Pending Proof</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-n" style="color:#00c896">{completed}</div>
+          <div class="stat-l">Completed</div>
         </div>
         <div class="stat-box">
           <div class="stat-n" style="color:#00c896">{rate}%</div>
-          <div class="stat-l">Resolution rate</div>
+          <div class="stat-l">Completion rate</div>
         </div>
       </div>
 
       <div class="feed-list">
         {#each sorted as inc (inc.id)}
           {@const sev = SEV[inc.severity]}
-          <div class="feed-row" class:resolved={inc.resolved}>
+          <div class="feed-row" class:resolved={isResolutionComplete(inc)} class:pending={isResolutionPendingProof(inc)}>
             <div class="feed-avatar" style="background:{sev.bg};color:{sev.color}">
               {@html CAT_SVG[inc.category]||CAT_SVG.other}
             </div>
@@ -72,9 +94,20 @@
               <div class="feed-loc">{inc.barangay} · {inc.location}</div>
               <div class="feed-meta">{inc.reports} reports · {inc.time} · {inc.channel}</div>
             </div>
-            <div class="feed-status" class:resolved={inc.resolved}>
-              <div class="status-pip" class:green={inc.resolved} class:red={!inc.resolved}></div>
-              {inc.resolved ? 'Resolved' : 'Open'}
+            <div class="feed-status" class:resolved={isResolutionComplete(inc)} class:pending={isResolutionPendingProof(inc)}>
+              <div
+                class="status-pip"
+                class:green={isResolutionComplete(inc)}
+                class:yellow={isResolutionPendingProof(inc)}
+                class:red={!inc.resolved}
+              ></div>
+              {#if isResolutionComplete(inc)}
+                Completed
+              {:else if isResolutionPendingProof(inc)}
+                Resolved - Pending Proof
+              {:else}
+                Open
+              {/if}
             </div>
           </div>
         {/each}
@@ -125,7 +158,7 @@
   .close-btn:hover { background: rgba(255,255,255,0.1); color: #d0d0e0; }
 
   .stats-row {
-    display: grid; grid-template-columns: repeat(4,1fr);
+    display: grid; grid-template-columns: repeat(5,1fr);
     border-bottom: 1px solid rgba(255,255,255,0.06);
     flex-shrink: 0;
   }
@@ -150,6 +183,7 @@
   }
   .feed-row:hover { background: rgba(255,255,255,0.03); }
   .feed-row.resolved { opacity: 0.45; }
+  .feed-row.pending { opacity: 0.9; border-left: 2px solid rgba(245,200,0,0.4); }
 
   .feed-avatar {
     width: 36px; height: 36px; border-radius: 10px;
@@ -169,8 +203,10 @@
     font-weight: 500;
   }
   .feed-status.resolved { color: #00c896; }
+  .feed-status.pending { color: #f5c800; }
   .status-pip { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
   .status-pip.red { background: #ff4560; animation: blink 2s step-end infinite; }
+  .status-pip.yellow { background: #f5c800; }
   .status-pip.green { background: #00c896; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
