@@ -808,7 +808,7 @@
 
   /* Put only the compass directly above the Base Map / Barangay mode stack. */
   :global(.maplibregl-ctrl-bottom-right .maplibregl-ctrl-group) {
-    margin: 0 12px 216px 0;
+    margin: 0 12px 166px 0;
   }
 
   /* Keep attribution fixed at the bottom-right edge, below the map option cards. */
