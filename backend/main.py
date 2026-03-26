@@ -24,6 +24,8 @@ from prompts import (
 )
 from routes import reports, telegram
 from utils.security import build_rate_limit_middleware, require_roles
+from utils.geocoding import reverse_geocode_barangay
+from utils.los_banos_data import LOS_BANOS_CENTER
 from config.environment import EnvironmentValidator
 from config.logging import StructuredLogger
 
@@ -342,6 +344,13 @@ async def _extract_report_data(history: list) -> tuple[dict | None, bool]:
                 data['latitude'] = coords['lat']
                 data['longitude'] = coords['lon']
 
+        # Auto-detect barangay from coordinates if not provided
+        if data.get('latitude') and data.get('longitude'):
+            if not data.get('barangay') or data.get('barangay') == 'unknown':
+                detected_barangay = reverse_geocode_barangay(data['latitude'], data['longitude'])
+                if detected_barangay != 'Unknown':
+                    data['barangay'] = detected_barangay
+
         if is_complete and not data.get('report_id'):
             data['report_id'] = f'RPT-{uuid.uuid4().hex[:8].upper()}'
 
@@ -425,18 +434,29 @@ async def submit_report(
     try:
         supabase = _get_supabase()
 
+        # Get coordinates from payload or use Los Baños center as default
+        latitude = payload.get('latitude') or LOS_BANOS_CENTER['lat']
+        longitude = payload.get('longitude') or LOS_BANOS_CENTER['lng']
+
+        # Auto-detect barangay from coordinates if not provided
+        barangay = payload.get('barangay', '').strip()
+        if not barangay:
+            barangay = reverse_geocode_barangay(latitude, longitude)
+            if barangay == 'Unknown':
+                barangay = 'Poblacion'  # Default to Poblacion if detection fails
+
         report = {
             'id': payload.get('report_id') or f'RPT-{uuid.uuid4().hex[:8].upper()}',
             'reporter_anonymous_id': payload.get('reporter_anonymous_id', 'ANON-UNKNOWN'),
             'issue_type': payload.get('issue_type', 'other'),
             'description': payload.get('description', ''),
-            'latitude': payload.get('latitude') or 14.6942,
-            'longitude': payload.get('longitude') or 120.9834,
+            'latitude': latitude,
+            'longitude': longitude,
             'location_text': payload.get('location_text', ''),
             'urgency': payload.get('urgency', 'medium'),
             'sdg_tag': payload.get('sdg_tag'),
             'status': 'received',
-            'barangay': payload.get('barangay', 'unknown'),
+            'barangay': barangay,
             'photo_url': payload.get('photo_url'),
         }
 
