@@ -3,9 +3,12 @@ load_dotenv()
 
 import os
 import tempfile
+import time
+from urllib.parse import quote
 
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from supabase import create_client
@@ -16,6 +19,8 @@ from utils.security import require_roles
 
 
 router = APIRouter()
+
+MAX_EVIDENCE_FILE_SIZE_BYTES = 15 * 1024 * 1024
 
 
 def _has_text(value: Optional[str]) -> bool:
@@ -41,6 +46,65 @@ def _get_supabase():
         os.getenv('SUPABASE_URL'),
         os.getenv('SUPABASE_SERVICE_KEY'),
     )
+
+
+def _sanitize_for_path_segment(value: str, fallback: str = 'file') -> str:
+    cleaned = ''.join(ch if ch.isalnum() or ch in '._-' else '-' for ch in str(value or '').strip().lower())
+    cleaned = '-'.join(part for part in cleaned.split('-') if part)
+    return cleaned or fallback
+
+
+def _encode_storage_path(path: str) -> str:
+    return '/'.join(quote(part, safe='') for part in str(path).split('/') if part)
+
+
+def _build_public_storage_url(bucket: str, object_path: str) -> str:
+    supabase_url = (os.getenv('SUPABASE_URL') or '').rstrip('/')
+    encoded_bucket = quote(bucket, safe='')
+    return f'{supabase_url}/storage/v1/object/public/{encoded_bucket}/{_encode_storage_path(object_path)}'
+
+
+async def _upload_resolution_file_to_storage(report_id: str, file: UploadFile, kind: str, bucket: str) -> str:
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail=f'{kind} file is required')
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail=f'{kind} file is empty')
+    if len(data) > MAX_EVIDENCE_FILE_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail=f'{kind} file exceeds 15 MB limit')
+
+    original_name = str(file.filename)
+    dot_index = original_name.rfind('.')
+    extension = _sanitize_for_path_segment(original_name[dot_index + 1:], '') if dot_index > -1 else ''
+    base_name = original_name[:dot_index] if dot_index > -1 else original_name
+    safe_base_name = _sanitize_for_path_segment(base_name, 'evidence')
+    safe_report_id = _sanitize_for_path_segment(report_id, 'report')
+    unique_suffix = f"{int(time.time() * 1000)}-{os.urandom(3).hex()}"
+    object_name = f'{kind}-{safe_base_name}-{unique_suffix}.{extension}' if extension else f'{kind}-{safe_base_name}-{unique_suffix}'
+    object_path = f'resolutions/{safe_report_id}/{object_name}'
+
+    supabase_url = (os.getenv('SUPABASE_URL') or '').rstrip('/')
+    service_key = os.getenv('SUPABASE_SERVICE_KEY') or os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    if not supabase_url or not service_key:
+        raise HTTPException(status_code=500, detail='Supabase storage credentials are not configured')
+
+    upload_url = f'{supabase_url}/storage/v1/object/{quote(bucket, safe="")}/{_encode_storage_path(object_path)}'
+    headers = {
+        'apikey': service_key,
+        'Authorization': f'Bearer {service_key}',
+        'x-upsert': 'true',
+        'Content-Type': file.content_type or 'application/octet-stream',
+    }
+
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        response = await client.post(upload_url, headers=headers, content=data)
+
+    if response.status_code >= 400:
+        reason = response.text.strip() or response.reason_phrase or 'Upload failed'
+        raise HTTPException(status_code=502, detail=f'Failed to upload {kind} file: {response.status_code} {reason}')
+
+    return _build_public_storage_url(bucket, object_path)
 
 
 # ── Request models ─────────────────────────────────────────────────────────────
@@ -279,6 +343,51 @@ async def transcribe_voice(
     finally:
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
+
+
+@router.post('/reports/{report_id}/resolution-evidence')
+async def upload_resolution_evidence(
+    report_id: str,
+    written_report_file: Optional[UploadFile] = File(default=None),
+    photo_evidence_file: Optional[UploadFile] = File(default=None),
+):
+    if not written_report_file and not photo_evidence_file:
+        raise HTTPException(status_code=400, detail='At least one evidence file is required')
+
+    bucket = os.getenv('SUPABASE_STORAGE_BUCKET', 'photos')
+
+    try:
+        existing = _get_supabase().table('reports').select('id').eq('id', report_id).limit(1).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail='Report not found')
+
+        resolution_note_url = ''
+        resolution_photo_url = ''
+
+        if written_report_file:
+            resolution_note_url = await _upload_resolution_file_to_storage(
+                report_id,
+                written_report_file,
+                'report',
+                bucket,
+            )
+
+        if photo_evidence_file:
+            resolution_photo_url = await _upload_resolution_file_to_storage(
+                report_id,
+                photo_evidence_file,
+                'photo',
+                bucket,
+            )
+
+        return {
+            'resolution_note': resolution_note_url,
+            'resolution_photo_url': resolution_photo_url,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get('/analytics')
