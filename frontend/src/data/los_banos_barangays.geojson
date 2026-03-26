@@ -1,0 +1,138 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Poblacion",
+        "barangay_id": 1
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [121.2380, 14.1650],
+            [121.2476, 14.1650],
+            [121.2476, 14.1738],
+            [121.2380, 14.1738],
+            [121.2380, 14.1650]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Baybagin",
+        "barangay_id": 2
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [121.2320, 14.1490],
+            [121.2436, 14.1490],
+            [121.2436, 14.1594],
+            [121.2320, 14.1594],
+            [121.2320, 14.1490]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Masili",
+        "barangay_id": 3
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [121.2408, 14.1708],
+            [121.2504, 14.1708],
+            [121.2504, 14.1804],
+            [121.2408, 14.1804],
+            [121.2408, 14.1708]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Magsayo",
+        "barangay_id": 4
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [121.2472, 14.1586],
+            [121.2568, 14.1586],
+            [121.2568, 14.1682],
+            [121.2472, 14.1682],
+            [121.2472, 14.1586]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Putintan",
+        "barangay_id": 5
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [121.2332, 14.1732],
+            [121.2428, 14.1732],
+            [121.2428, 14.1828],
+            [121.2332, 14.1828],
+            [121.2332, 14.1732]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Canlubang",
+        "barangay_id": 6
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [121.2495, 14.1420],
+            [121.2591, 14.1420],
+            [121.2591, 14.1516],
+            [121.2495, 14.1516],
+            [121.2495, 14.1420]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Dalahican",
+        "barangay_id": 7
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [121.2408, 14.1762],
+            [121.2504, 14.1762],
+            [121.2504, 14.1858],
+            [121.2408, 14.1858],
+            [121.2408, 14.1762]
+          ]
+        ]
+      }
+    }
+  ]
+}
