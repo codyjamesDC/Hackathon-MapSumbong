@@ -750,17 +750,26 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         return Icons.water;
       case 'fire':
         return Icons.local_fire_department;
+      case 'road_hazard':
       case 'road':
       case 'pothole':
         return Icons.construction;
+      case 'power_outage':
       case 'power':
       case 'broken_streetlight':
         return Icons.bolt;
       case 'waste':
       case 'garbage':
         return Icons.delete;
+      case 'water_supply':
       case 'water':
         return Icons.water_drop;
+      case 'medical':
+        return Icons.medical_services;
+      case 'landslide':
+        return Icons.terrain;
+      case 'earthquake_damage':
+        return Icons.crisis_alert;
       case 'emergency':
         return Icons.emergency;
       default:
@@ -928,17 +937,26 @@ class _HeaderCard extends StatelessWidget {
         return Icons.water;
       case 'fire':
         return Icons.local_fire_department;
+      case 'road_hazard':
       case 'road':
       case 'pothole':
         return Icons.construction;
+      case 'power_outage':
       case 'power':
       case 'broken_streetlight':
         return Icons.bolt;
       case 'waste':
       case 'garbage':
         return Icons.delete;
+      case 'water_supply':
       case 'water':
         return Icons.water_drop;
+      case 'medical':
+        return Icons.medical_services;
+      case 'landslide':
+        return Icons.terrain;
+      case 'earthquake_damage':
+        return Icons.crisis_alert;
       case 'emergency':
         return Icons.emergency;
       default:

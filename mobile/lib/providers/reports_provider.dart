@@ -60,11 +60,29 @@ class ReportsProvider with ChangeNotifier {
         reporterAnonymousId: report.reporterAnonymousId,
       );
 
-      final reportId = result['report_id'] as String?;
-      if (reportId == null) throw Exception('No report_id in response');
+      if (result['success'] == false) {
+        final backendError = result['error'] as String?;
+        throw Exception(backendError ?? 'Report submission failed on server');
+      }
+
+      final reportId = _extractReportId(result);
+      if (reportId == null || reportId.isEmpty) {
+        throw Exception('No report ID returned by server');
+      }
 
       // Re-fetch the saved report so we have all server-generated fields
-      final saved = await SupabaseService.getReportById(reportId);
+      Report saved;
+      try {
+        saved = await SupabaseService.getReportById(reportId);
+      } catch (_) {
+        // If read-after-write is delayed, still return a report carrying server ID.
+        final now = DateTime.now();
+        saved = report.copyWith(
+          id: reportId,
+          createdAt: now,
+          updatedAt: now,
+        );
+      }
       _reports.insert(0, saved);
       return saved;
     } catch (e) {
@@ -74,6 +92,22 @@ class ReportsProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  String? _extractReportId(Map<String, dynamic> result) {
+    final reportId = result['report_id']?.toString();
+    if (reportId != null && reportId.isNotEmpty) return reportId;
+
+    final id = result['id']?.toString();
+    if (id != null && id.isNotEmpty) return id;
+
+    final nested = result['report'];
+    if (nested is Map<String, dynamic>) {
+      final nestedId = nested['id']?.toString();
+      if (nestedId != null && nestedId.isNotEmpty) return nestedId;
+    }
+
+    return null;
   }
 
   // ── Status update ─────────────────────────────────────────────────────────

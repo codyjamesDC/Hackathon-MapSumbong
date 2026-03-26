@@ -2,20 +2,34 @@
 class ReportPayloadBuilder {
   static const _issueTypes = {
     'flood',
-    'pothole',
-    'broken_streetlight',
-    'garbage',
-    'road_damage',
+    'waste',
+    'road_hazard',
+    'road',
     'power_outage',
-    'water_problem',
+    'power',
+    'water_supply',
+    'water',
+    'medical',
     'emergency',
     'fire',
+    'crime',
+    'landslide',
+    'earthquake_damage',
     'other',
+  };
+
+  static const _issueAliases = {
+    'pothole': 'road_hazard',
+    'road_damage': 'road_hazard',
+    'broken_streetlight': 'power_outage',
+    'garbage': 'waste',
+    'water_problem': 'water_supply',
   };
 
   static String _normalizeIssueType(dynamic raw) {
     final s = (raw ?? 'other').toString().trim().toLowerCase();
-    if (_issueTypes.contains(s)) return s;
+    final mapped = _issueAliases[s] ?? s;
+    if (_issueTypes.contains(mapped)) return mapped;
     return 'other';
   }
 

@@ -94,14 +94,20 @@ class IssueTypeIcon extends StatelessWidget {
   static const Map<String, (IconData, Color)> _icons = {
     'flood': (Icons.water, Color(0xFF3B82F6)),
     'waste': (Icons.delete_rounded, Color(0xFF6B7280)),
+    'road_hazard': (Icons.construction_rounded, Color(0xFFF59E0B)),
     'road': (Icons.construction_rounded, Color(0xFF78716C)),
     'pothole': (Icons.warning_amber_rounded, Color(0xFFF59E0B)),
+    'power_outage': (Icons.bolt_rounded, Color(0xFFF59E0B)),
     'power': (Icons.bolt_rounded, Color(0xFFF59E0B)),
     'broken_streetlight': (Icons.lightbulb_outline_rounded, Color(0xFFF59E0B)),
+    'water_supply': (Icons.water_drop_rounded, Color(0xFF0EA5E9)),
     'water': (Icons.water_drop_rounded, Color(0xFF0EA5E9)),
+    'medical': (Icons.medical_services_rounded, Color(0xFFEF4444)),
     'emergency': (Icons.emergency_rounded, Color(0xFFEF4444)),
     'fire': (Icons.local_fire_department_rounded, Color(0xFFEF4444)),
     'crime': (Icons.shield_rounded, Color(0xFF8B5CF6)),
+    'landslide': (Icons.terrain_rounded, Color(0xFF78716C)),
+    'earthquake_damage': (Icons.crisis_alert_rounded, Color(0xFFB45309)),
     'other': (Icons.report_problem_rounded, Color(0xFF6B7280)),
   };
 

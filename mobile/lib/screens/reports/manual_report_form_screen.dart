@@ -31,12 +31,14 @@ class _ManualReportFormScreenState extends State<ManualReportFormScreen> {
 
   static const _issueTypes = [
     ('flood', 'Baha'),
-    ('pothole', 'Lubak sa Daan'),
-    ('broken_streetlight', 'Sirang Streetlight'),
-    ('garbage', 'Basura'),
-    ('road_damage', 'Sirang Kalsada'),
-    ('power_outage', 'Walang Kuryente'),
-    ('water_problem', 'Problema sa Tubig'),
+    ('road_hazard', 'Lubak / Sirang Kalsada'),
+    ('power_outage', 'Walang Kuryente / Sirang Streetlight'),
+    ('waste', 'Basura'),
+    ('water_supply', 'Problema sa Tubig'),
+    ('medical', 'Medical Emergency'),
+    ('landslide', 'Pagguho ng Lupa'),
+    ('earthquake_damage', 'Pinsala ng Lindol'),
+    ('fire', 'Sunog'),
     ('emergency', 'Emergency'),
     ('other', 'Iba pa'),
   ];
@@ -140,8 +142,8 @@ class _ManualReportFormScreenState extends State<ManualReportFormScreen> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Naisumite ang report.'),
+      SnackBar(
+        content: Text('Naisumite ang report. Report ID: ${saved.id}'),
         backgroundColor: AppColors.low,
       ),
     );

@@ -10,6 +10,38 @@ class ApiService {
   static String get baseUrl =>
       dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000';
 
+  static const Set<String> _allowedIssueTypes = {
+    'flood',
+    'waste',
+    'road_hazard',
+    'road',
+    'power_outage',
+    'power',
+    'water_supply',
+    'water',
+    'medical',
+    'emergency',
+    'fire',
+    'crime',
+    'landslide',
+    'earthquake_damage',
+    'other',
+  };
+
+  static const Map<String, String> _issueTypeAliases = {
+    'pothole': 'road_hazard',
+    'road_damage': 'road_hazard',
+    'broken_streetlight': 'power_outage',
+    'garbage': 'waste',
+    'water_problem': 'water_supply',
+  };
+
+  static String _normalizeIssueType(dynamic raw) {
+    final value = (raw ?? 'other').toString().trim().toLowerCase();
+    final mapped = _issueTypeAliases[value] ?? value;
+    return _allowedIssueTypes.contains(mapped) ? mapped : 'other';
+  }
+
   // Gemini 2.5 Flash can take 30-60s on free tier — use 90s to be safe
   static const Duration _timeout = Duration(seconds: 90);
 
@@ -99,12 +131,15 @@ class ApiService {
     final url = '$baseUrl/submit-report';
     debugPrint('ApiService: POST $url');
 
+    final normalizedData = Map<String, dynamic>.from(reportData);
+    normalizedData['issue_type'] = _normalizeIssueType(normalizedData['issue_type']);
+
     final response = await http
         .post(
           Uri.parse(url),
           headers: _headersJson(),
           body: jsonEncode({
-            ...reportData,
+            ...normalizedData,
             'reporter_anonymous_id': reporterAnonymousId,
           }),
         )
