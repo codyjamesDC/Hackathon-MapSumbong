@@ -6,7 +6,7 @@
   let channel = 'Telegram';
   let inputType = 'text';
   let message = '';
-  let barangay = 'Poblacion';
+  let barangay = 'Anos';
   let previewResult = null;
 
   const CHANNELS = ['Telegram', 'SMS', 'Messenger', 'Viber', 'Voice call'];
@@ -50,7 +50,7 @@
 
   // Detect barangay from coordinates
   function detectBarangay(lat, lng) {
-    let closestBarangay = 'Poblacion';
+    let closestBarangay = 'Anos';
     let minDistance = Infinity;
 
     Object.entries(BARANGAY_COORDS).forEach(([brgy, coords]) => {
@@ -66,46 +66,46 @@
 
   const SAMPLE_REPORTS = [
     {
-      message: "Grabe ang baha dito sa Poblacion! Tuhod na halos ang tubig sa main street.",
+      message: "Grabe ang baha dito sa Baybayin, tuhod na ang tubig sa daan.",
       type: 'Flash Flood', category: 'flood', severity: 'critical',
-      barangay: 'Poblacion', location: 'Main Street, Poblacion',
-      lat: 14.1694 + (Math.random()-0.5)*0.005, lng: 121.2428 + (Math.random()-0.5)*0.005,
+      barangay: 'Baybayin', location: 'Main road, Baybayin',
+      lat: 14.181197 + (Math.random()-0.5)*0.003, lng: 121.223237 + (Math.random()-0.5)*0.003,
       ai: 'Flash flood confirmed. Significant water accumulation in downtown area.',
       action: 'Lumikas na agad. Pumunta sa pinakamataas na lugar.',
       authorities: ['MDRRMO', 'Barangay Captain']
     },
     {
-      message: "May sunog sa Baybagin! Kumakalat na ang apoy sa bahay.",
+      message: "May sunog sa Batong Malake, kumakalat na ang apoy sa isang bahay.",
       type: 'Structure Fire', category: 'fire', severity: 'critical',
-      barangay: 'Baybagin', location: 'Residential area, Baybagin',
-      lat: 14.1542 + (Math.random()-0.5)*0.005, lng: 121.2378 + (Math.random()-0.5)*0.005,
+      barangay: 'Batong Malake', location: 'Residential area, Batong Malake',
+      lat: 14.159099 + (Math.random()-0.5)*0.003, lng: 121.230251 + (Math.random()-0.5)*0.003,
       ai: 'Active structure fire in residential area. Rapid response needed.',
       action: 'Lumayo sa gusali. Tumawag sa BFP: 160.',
       authorities: ['BFP', 'PNP', 'MDRRMO']
     },
     {
-      message: "May butas sa kalsada sa Masili at nakalagay tubig dyan. Maingay ang trapiko.",
+      message: "Malalim ang butas sa kalsada sa San Antonio at delikado sa mga motor.",
       type: 'Road Hazard', category: 'infrastructure', severity: 'high',
-      barangay: 'Masili', location: 'Main Road, Masili',
-      lat: 14.1756 + (Math.random()-0.5)*0.005, lng: 121.2456 + (Math.random()-0.5)*0.005,
+      barangay: 'San Antonio', location: 'Main Road, San Antonio',
+      lat: 14.174239 + (Math.random()-0.5)*0.003, lng: 121.247285 + (Math.random()-0.5)*0.003,
       ai: 'Road obstruction with pothole and water accumulation. Vehicle hazard.',
       action: 'Iwasan ang lugar. Gumamit ng alternate routes.',
       authorities: ['MMDA', 'Barangay Tanod']
     },
     {
-      message: "May matanda na nahihirapan huminga dito sa Magsayo. Bigyan ng tulong.",
+      message: "May matanda na nahihirapan huminga dito sa Maahas. Kailangan ng tulong.",
       type: 'Medical Emergency', category: 'medical', severity: 'high',
-      barangay: 'Magsayo', location: 'Residential area, Magsayo',
-      lat: 14.1634 + (Math.random()-0.5)*0.005, lng: 121.2520 + (Math.random()-0.5)*0.005,
+      barangay: 'Maahas', location: 'Residential area, Maahas',
+      lat: 14.171918 + (Math.random()-0.5)*0.003, lng: 121.257908 + (Math.random()-0.5)*0.003,
       ai: 'Elderly person in respiratory distress. Immediate EMS dispatch recommended.',
       action: 'Tumawag sa 911 agad. Huwag gumalaw ang pasyente.',
       authorities: ['PNP', 'MDRRMO']
     },
     {
-      message: "Maraming basura sa drainage dito sa Canlubang. Puno na.",
+      message: "Maraming basura sa drainage dito sa Putho-Tuntungin, barado na.",
       type: 'Illegal Dumping', category: 'waste', severity: 'medium',
-      barangay: 'Canlubang', location: 'Drainage area, Canlubang',
-      lat: 14.1468 + (Math.random()-0.5)*0.005, lng: 121.2543 + (Math.random()-0.5)*0.005,
+      barangay: 'Putho-Tuntungin', location: 'Drainage area, Putho-Tuntungin',
+      lat: 14.153004 + (Math.random()-0.5)*0.003, lng: 121.249828 + (Math.random()-0.5)*0.003,
       ai: 'Drainage blockage from accumulated garbage. Flood risk concern.',
       action: 'Iulat sa barangay hall. Huwag mag-dump ng basura.',
       authorities: ['Barangay Captain']
@@ -138,13 +138,14 @@
     const newInc = {
       ...matched,
       id: Date.now(),
-      lat: matched.lat + (Math.random() - 0.5) * 0.02,
-      lng: matched.lng + (Math.random() - 0.5) * 0.02,
+      lat: (BARANGAY_COORDS[barangay]?.lat ?? matched.lat) + (Math.random() - 0.5) * 0.003,
+      lng: (BARANGAY_COORDS[barangay]?.lng ?? matched.lng) + (Math.random() - 0.5) * 0.003,
       reports: Math.floor(Math.random() * 6) + 1,
       time: 'Just now',
       channel,
       description: message,
-      barangay: barangay,
+      barangay,
+      location: `Near barangay hall, ${barangay}`,
       resolved: false,
       radius: 100 + Math.random() * 200
     };

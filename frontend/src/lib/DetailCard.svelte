@@ -20,7 +20,10 @@
   $: inc = $selectedIncident;
   $: sev = inc ? SEV[inc.severity] : null;
 
-  function close() { selectedIncident.set(null); }
+  function close(e) {
+    if (e?.stopPropagation) e.stopPropagation();
+    selectedIncident.set(null);
+  }
   function resolve() {
     incidents.update(l => l.map(i => i.id === inc.id ? {...i, resolved:true} : i));
     toastMsg.set('Resolved. SMS confirmation sent to reporter.');
@@ -39,7 +42,7 @@
         <div class="card-title">{inc.type}</div>
         <div class="card-sub">{inc.barangay}</div>
       </div>
-      <button class="close-btn" on:click={close}>
+      <button class="close-btn" on:click|stopPropagation={close}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
