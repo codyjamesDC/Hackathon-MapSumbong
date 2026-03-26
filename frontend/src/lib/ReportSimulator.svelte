@@ -6,55 +6,94 @@
   let channel = 'Telegram';
   let inputType = 'text';
   let message = '';
+  let barangay = 'Poblacion';
   let previewResult = null;
 
   const CHANNELS = ['Telegram', 'SMS', 'Messenger', 'Viber', 'Voice call'];
   const INPUT_TYPES = ['text', 'voice', 'photo'];
 
+  // Los Baños, Laguna barangays
+  const LOS_BANOS_BARANGAYS = [
+    'Poblacion',
+    'Baybagin',
+    'Masili',
+    'Magsayo',
+    'Putintan',
+    'Canlubang',
+    'Dalahican'
+  ];
+
+  // Barangay coordinates for auto-detection
+  const BARANGAY_COORDS = {
+    'Poblacion': { lat: 14.1694, lng: 121.2428 },
+    'Baybagin': { lat: 14.1542, lng: 121.2378 },
+    'Masili': { lat: 14.1756, lng: 121.2456 },
+    'Magsayo': { lat: 14.1634, lng: 121.2520 },
+    'Putintan': { lat: 14.1780, lng: 121.2380 },
+    'Canlubang': { lat: 14.1468, lng: 121.2543 },
+    'Dalahican': { lat: 14.1810, lng: 121.2456 }
+  };
+
+  // Detect barangay from coordinates
+  function detectBarangay(lat, lng) {
+    let closestBarangay = 'Poblacion';
+    let minDistance = Infinity;
+
+    Object.entries(BARANGAY_COORDS).forEach(([brgy, coords]) => {
+      const distance = Math.sqrt((lat - coords.lat) ** 2 + (lng - coords.lng) ** 2);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestBarangay = brgy;
+      }
+    });
+
+    return closestBarangay;
+  }
+
   const SAMPLE_REPORTS = [
     {
-      message: "Grabe ang baha dito sa may gate ng elementarya namin sa Brgy. Nangka. Tuhod na halos ang tubig.",
+      message: "Grabe ang baha dito sa Poblacion! Tuhod na halos ang tubig sa main street.",
       type: 'Flash Flood', category: 'flood', severity: 'critical',
-      barangay: 'Brgy. Nangka', location: 'Near Nangka Elementary gate',
-      lat: 14.6510 + (Math.random()-0.5)*0.01, lng: 121.1012 + (Math.random()-0.5)*0.01,
-      ai: 'Flash flood confirmed. Knee-level water at school entrance — children and pedestrians at high risk. Cluster forming.',
+      barangay: 'Poblacion', location: 'Main Street, Poblacion',
+      lat: 14.1694 + (Math.random()-0.5)*0.005, lng: 121.2428 + (Math.random()-0.5)*0.005,
+      ai: 'Flash flood confirmed. Significant water accumulation in downtown area.',
       action: 'Lumikas na agad. Pumunta sa pinakamataas na lugar.',
       authorities: ['MDRRMO', 'Barangay Captain']
     },
     {
-      message: "May sunog sa tabi ng palengke! Kumakalat na ang apoy.",
+      message: "May sunog sa Baybagin! Kumakalat na ang apoy sa bahay.",
       type: 'Structure Fire', category: 'fire', severity: 'critical',
-      barangay: 'Brgy. Tejeros', location: 'Tejeros Market area, Makati',
-      lat: 14.5521 + (Math.random()-0.5)*0.01, lng: 121.0189 + (Math.random()-0.5)*0.01,
-      ai: 'Active structure fire near market. High density area — rapid spread risk. BFP dispatch critical.',
+      barangay: 'Baybagin', location: 'Residential area, Baybagin',
+      lat: 14.1542 + (Math.random()-0.5)*0.005, lng: 121.2378 + (Math.random()-0.5)*0.005,
+      ai: 'Active structure fire in residential area. Rapid response needed.',
       action: 'Lumayo sa gusali. Tumawag sa BFP: 160.',
       authorities: ['BFP', 'PNP', 'MDRRMO']
     },
     {
-      message: "Nagsara ang daan sa may Quirino Highway. May malaking butas at tubig.",
+      message: "May butas sa kalsada sa Masili at nakalagay tubig dyan. Maingay ang trapiko.",
       type: 'Road Hazard', category: 'infrastructure', severity: 'high',
-      barangay: 'Brgy. Talipapa', location: 'Quirino Highway, Novaliches',
-      lat: 14.7012 + (Math.random()-0.5)*0.01, lng: 121.0234 + (Math.random()-0.5)*0.01,
-      ai: 'Major road obstruction on primary route. Pothole and flooding combination — vehicle damage risk high.',
-      action: 'Iwasan ang Quirino Highway. Gumamit ng alternate routes.',
+      barangay: 'Masili', location: 'Main Road, Masili',
+      lat: 14.1756 + (Math.random()-0.5)*0.005, lng: 121.2456 + (Math.random()-0.5)*0.005,
+      ai: 'Road obstruction with pothole and water accumulation. Vehicle hazard.',
+      action: 'Iwasan ang lugar. Gumamit ng alternate routes.',
       authorities: ['MMDA', 'Barangay Tanod']
     },
     {
-      message: "May matanda na nahihirapan huminga sa may kanto ng Rizal Ave.",
+      message: "May matanda na nahihirapan huminga dito sa Magsayo. Bigyan ng tulong.",
       type: 'Medical Emergency', category: 'medical', severity: 'high',
-      barangay: 'Brgy. 596', location: 'Rizal Avenue corner, Manila',
-      lat: 14.6012 + (Math.random()-0.5)*0.01, lng: 120.9834 + (Math.random()-0.5)*0.01,
-      ai: 'Elderly person in respiratory distress. Possible cardiac event. Immediate EMS dispatch recommended.',
+      barangay: 'Magsayo', location: 'Residential area, Magsayo',
+      lat: 14.1634 + (Math.random()-0.5)*0.005, lng: 121.2520 + (Math.random()-0.5)*0.005,
+      ai: 'Elderly person in respiratory distress. Immediate EMS dispatch recommended.',
       action: 'Tumawag sa 911 agad. Huwag gumalaw ang pasyente.',
       authorities: ['PNP', 'MDRRMO']
     },
     {
-      message: "Nagtatapon ng basura sa drainage canal namin. Delikado pag umuulan.",
+      message: "Maraming basura sa drainage dito sa Canlubang. Puno na.",
       type: 'Illegal Dumping', category: 'waste', severity: 'medium',
-      barangay: 'Brgy. Manggahan', location: 'Manggahan Floodway area',
-      lat: 14.5923 + (Math.random()-0.5)*0.01, lng: 121.0956 + (Math.random()-0.5)*0.01,
-      ai: 'Illegal dumping near floodway. Drainage blockage increases flood risk. Non-urgent but time-sensitive.',
-      action: 'Iulat sa barangay hall. Huwag mag-dump ng basura sa drainage.',
+      barangay: 'Canlubang', location: 'Drainage area, Canlubang',
+      lat: 14.1468 + (Math.random()-0.5)*0.005, lng: 121.2543 + (Math.random()-0.5)*0.005,
+      ai: 'Drainage blockage from accumulated garbage. Flood risk concern.',
+      action: 'Iulat sa barangay hall. Huwag mag-dump ng basura.',
       authorities: ['Barangay Captain']
     }
   ];
@@ -62,6 +101,7 @@
   function fillSample() {
     const s = SAMPLE_REPORTS[Math.floor(Math.random() * SAMPLE_REPORTS.length)];
     message = s.message;
+    barangay = s.barangay;
   }
 
   async function submitReport() {
@@ -90,9 +130,14 @@
       time: 'Just now',
       channel,
       description: message,
+      barangay: barangay,
       resolved: false,
       radius: 100 + Math.random() * 200
     };
+
+    // Auto-detect barangay from coordinates
+    const detectedBarangay = detectBarangay(newInc.lat, newInc.lng);
+    newInc.barangay = detectedBarangay;
 
     previewResult = newInc;
     loading = false;
@@ -150,6 +195,15 @@
             <button class="ch-pill" class:active={inputType===t} on:click={() => inputType=t}>{t}</button>
           {/each}
         </div>
+      </div>
+
+      <div class="field">
+        <label>Barangay</label>
+        <select bind:value={barangay} class="barangay-select">
+          {#each LOS_BANOS_BARANGAYS as brgy}
+            <option value={brgy}>{brgy}</option>
+          {/each}
+        </select>
       </div>
 
       <div class="field">
@@ -266,6 +320,18 @@
   }
   textarea::placeholder { color: #4a5568; }
   textarea:focus { outline: none; border-color: rgba(0,212,170,0.4); }
+
+  .barangay-select {
+    width: 100%; padding: 8px 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px; color: #f0f4ff;
+    font-size: 12px; font-family: 'DM Sans', sans-serif;
+    transition: border-color 0.15s;
+    cursor: pointer;
+  }
+  .barangay-select option { background: #111827; color: #f0f4ff; }
+  .barangay-select:focus { outline: none; border-color: rgba(0,212,170,0.4); }
 
   .triage-btn {
     width: 100%; padding: 9px;
