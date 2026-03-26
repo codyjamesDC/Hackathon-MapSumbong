@@ -1,6 +1,10 @@
 <script>
   import { incidents, selectedIncident, activeFilter, toastMsg, stats } from './store.js';
-  import { resolveIncident } from './api.js';
+  import {
+    MAX_EVIDENCE_FILE_SIZE_BYTES,
+    resolveIncident,
+    uploadResolutionEvidence,
+  } from './api.js';
 
   let search = '';
   let tab = 'incidents';
@@ -35,8 +39,10 @@
 
   let showResolveModal = false;
   let resolvingIncident = null;
-  let resolutionNote = '';
+  let resolutionReportUrl = '';
   let resolutionPhotoUrl = '';
+  let resolutionReportFile = null;
+  let resolutionPhotoFile = null;
   let isSavingResolution = false;
 
   function hasText(value) {
@@ -61,6 +67,19 @@
       return sev;
     }
     return 'medium';
+  }
+
+  function formatFileSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let value = bytes;
+    let unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+    const digits = value >= 100 || unitIndex === 0 ? 0 : 1;
+    return `${value.toFixed(digits)} ${units[unitIndex]}`;
   }
 
   $: filtered = $incidents.filter(i => {
@@ -96,9 +115,33 @@
   function openResolveModal(inc, e) {
     if (e?.stopPropagation) e.stopPropagation();
     resolvingIncident = inc;
-    resolutionNote = inc?.resolutionNote || '';
+    resolutionReportUrl = inc?.resolutionNote || '';
     resolutionPhotoUrl = inc?.resolutionPhotoUrl || '';
+    resolutionReportFile = null;
+    resolutionPhotoFile = null;
     showResolveModal = true;
+  }
+
+  function handleReportFileChange(event) {
+    const file = event?.currentTarget?.files?.[0] || null;
+    if (file && file.size > MAX_EVIDENCE_FILE_SIZE_BYTES) {
+      toastMsg.set('Written report file is too large. Maximum size is 15 MB.');
+      event.currentTarget.value = '';
+      resolutionReportFile = null;
+      return;
+    }
+    resolutionReportFile = file;
+  }
+
+  function handlePhotoFileChange(event) {
+    const file = event?.currentTarget?.files?.[0] || null;
+    if (file && file.size > MAX_EVIDENCE_FILE_SIZE_BYTES) {
+      toastMsg.set('Photo evidence file is too large. Maximum size is 15 MB.');
+      event.currentTarget.value = '';
+      resolutionPhotoFile = null;
+      return;
+    }
+    resolutionPhotoFile = file;
   }
 
   async function markResolved(inc, e) {
@@ -126,7 +169,7 @@
       const merged = updated || fallbackResolved;
 
       incidents.update((list) =>
-        list.map((i) => (i.id === inc.id ? { ...i, ...merged } : i))
+        list.map((i) => (String(i.id) === String(inc.id) ? { ...i, ...merged } : i))
       );
 
       if ($selectedIncident?.id === inc.id) {
@@ -146,11 +189,12 @@
   }
 
   function closeResolveModal() {
-    if (isSavingResolution) return;
     showResolveModal = false;
     resolvingIncident = null;
-    resolutionNote = '';
+    resolutionReportUrl = '';
     resolutionPhotoUrl = '';
+    resolutionReportFile = null;
+    resolutionPhotoFile = null;
   }
 
   async function submitResolution() {
@@ -158,18 +202,39 @@
     isSavingResolution = true;
 
     try {
+      let uploadedEvidence = {
+        resolutionNote: '',
+        resolutionPhotoUrl: '',
+      };
+
+      if (resolutionReportFile || resolutionPhotoFile) {
+        uploadedEvidence = await uploadResolutionEvidence(resolvingIncident.id, {
+          writtenReportFile: resolutionReportFile,
+          photoEvidenceFile: resolutionPhotoFile,
+        });
+      }
+
+      const reportProofUrl = hasText(uploadedEvidence.resolutionNote)
+        ? uploadedEvidence.resolutionNote
+        : hasText(resolutionReportUrl)
+          ? resolutionReportUrl.trim()
+          : '';
+      const photoProofUrl = hasText(uploadedEvidence.resolutionPhotoUrl)
+        ? uploadedEvidence.resolutionPhotoUrl
+        : hasText(resolutionPhotoUrl)
+          ? resolutionPhotoUrl.trim()
+          : '';
+
       const updated = await resolveIncident(resolvingIncident.id, {
-        resolutionNote,
-        resolutionPhotoUrl,
+        resolutionNote: reportProofUrl,
+        resolutionPhotoUrl: photoProofUrl,
       });
 
       const fallbackResolved = {
         ...resolvingIncident,
         resolved: true,
-        resolutionNote: hasText(resolutionNote) ? resolutionNote.trim() : '',
-        resolutionPhotoUrl: hasText(resolutionPhotoUrl)
-          ? resolutionPhotoUrl.trim()
-          : '',
+        resolutionNote: reportProofUrl,
+        resolutionPhotoUrl: photoProofUrl,
       };
       const fallbackComplete =
         hasText(fallbackResolved.resolutionNote) &&
@@ -180,7 +245,7 @@
       const merged = updated || fallbackResolved;
 
       incidents.update((list) =>
-        list.map((i) => (i.id === resolvingIncident.id ? { ...i, ...merged } : i))
+        list.map((i) => (String(i.id) === String(resolvingIncident.id) ? { ...i, ...merged } : i))
       );
 
       if ($selectedIncident?.id === resolvingIncident.id) {
@@ -369,33 +434,43 @@
       <h3>Mark as resolved</h3>
       <p>
         Pwede i-mark as resolved ngayon. Para fully completed,
-        kailangan ang written report at photo evidence.
+        kailangan ang uploaded written report file at photo evidence file.
       </p>
 
-      <label for="resolution-note">Written report</label>
-      <textarea
-        id="resolution-note"
-        bind:value={resolutionNote}
-        rows="3"
-        placeholder="Halimbawa: Natapos ang clearing, nalinis ang kanal, at na-verify ng barangay team."
-      ></textarea>
-
-      <label for="resolution-photo-url">Photo evidence URL</label>
+      <label for="resolution-note-file">Written report file</label>
       <input
-        id="resolution-photo-url"
-        type="url"
-        bind:value={resolutionPhotoUrl}
-        placeholder="https://..."
+        id="resolution-note-file"
+        type="file"
+        accept=".pdf,.doc,.docx,.txt,.rtf,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/rtf"
+        on:change={handleReportFileChange}
       />
+      {#if resolutionReportFile}
+        <div class="file-meta">Selected: {resolutionReportFile.name} ({formatFileSize(resolutionReportFile.size)})</div>
+      {:else if resolutionReportUrl.trim()}
+        <div class="file-meta">Existing written report already saved for this incident.</div>
+      {/if}
 
-      {#if !resolutionNote.trim() || !resolutionPhotoUrl.trim()}
+      <label for="resolution-photo-file">Photo evidence file</label>
+      <input
+        id="resolution-photo-file"
+        type="file"
+        accept="image/*"
+        on:change={handlePhotoFileChange}
+      />
+      {#if resolutionPhotoFile}
+        <div class="file-meta">Selected: {resolutionPhotoFile.name} ({formatFileSize(resolutionPhotoFile.size)})</div>
+      {:else if resolutionPhotoUrl.trim()}
+        <div class="file-meta">Existing photo evidence already saved for this incident.</div>
+      {/if}
+
+      {#if (!resolutionReportFile && !resolutionReportUrl.trim()) || (!resolutionPhotoFile && !resolutionPhotoUrl.trim())}
         <div class="resolve-hint">
-          Resolved lang muna ito. Pending proof pa hanggang may written report at photo evidence.
+          Resolved lang muna ito. Pending proof pa hanggang may uploaded written report at photo evidence file.
         </div>
       {/if}
 
       <div class="resolve-actions">
-        <button type="button" class="btn ghost" on:click={closeResolveModal} disabled={isSavingResolution}>
+        <button type="button" class="btn ghost" on:click={closeResolveModal}>
           Cancel
         </button>
         <button type="button" class="btn primary" on:click={submitResolution} disabled={isSavingResolution}>
@@ -587,7 +662,6 @@
     font-size: 12px;
     font-weight: 600;
   }
-  .resolve-modal textarea,
   .resolve-modal input {
     width: 100%;
     border: 1px solid rgba(255, 255, 255, 0.14);
@@ -598,11 +672,19 @@
     font-family: 'Inter', sans-serif;
     font-size: 12px;
   }
-  .resolve-modal textarea { resize: vertical; min-height: 78px; }
-  .resolve-modal textarea:focus,
+  .resolve-modal input[type='file'] {
+    padding: 8px;
+    cursor: pointer;
+  }
   .resolve-modal input:focus {
     outline: none;
     border-color: rgba(0, 200, 150, 0.5);
+  }
+  .file-meta {
+    margin-top: -4px;
+    color: #9fa0b8;
+    font-size: 11px;
+    line-height: 1.4;
   }
   .resolve-hint {
     color: #f5c800;

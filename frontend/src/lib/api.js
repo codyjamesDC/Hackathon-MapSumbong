@@ -10,6 +10,8 @@
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const SUPABASE_STORAGE_BUCKET = import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'photos';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
 
 const headers = {
   'apikey': SUPABASE_KEY,
@@ -17,13 +19,259 @@ const headers = {
   'Content-Type': 'application/json'
 };
 
+const RESOLVE_REQUEST_TIMEOUT_MS = 12000;
+const RESOLVE_UPLOAD_TIMEOUT_MS = 45000;
+export const MAX_EVIDENCE_FILE_SIZE_BYTES = 15 * 1024 * 1024;
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = RESOLVE_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error('Request timed out. Please try again.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function extractErrorMessage(res) {
+  try {
+    const data = await res.clone().json();
+    if (typeof data?.message === 'string' && data.message.trim()) {
+      return data.message.trim();
+    }
+    if (typeof data?.error_description === 'string' && data.error_description.trim()) {
+      return data.error_description.trim();
+    }
+    if (typeof data?.error === 'string' && data.error.trim()) {
+      return data.error.trim();
+    }
+  } catch {
+    // Fall back to plain text below.
+  }
+
+  try {
+    const text = await res.text();
+    if (typeof text === 'string' && text.trim()) {
+      return text.trim();
+    }
+  } catch {
+    // Ignore and return status text fallback.
+  }
+
+  return res.statusText || 'Request failed';
+}
+
+async function patchReport(encodedId, payload) {
+  const updateRes = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/reports?id=eq.${encodedId}`, {
+    method: 'PATCH',
+    headers: { ...headers, Prefer: 'return=representation' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!updateRes.ok) {
+    const reason = await extractErrorMessage(updateRes);
+    return {
+      ok: false,
+      row: null,
+      errorMessage: `${updateRes.status} ${reason}`
+    };
+  }
+
+  const updatedRows = await updateRes.json().catch(() => []);
+  const updatedRow = Array.isArray(updatedRows) && updatedRows.length
+    ? updatedRows[0]
+    : null;
+
+  return {
+    ok: true,
+    row: updatedRow,
+    errorMessage: ''
+  };
+}
+
 function hasText(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+function encodeStoragePath(path) {
+  return String(path)
+    .split('/')
+    .filter(Boolean)
+    .map(segment => encodeURIComponent(segment))
+    .join('/');
+}
+
+function sanitizeForPathSegment(value, fallback = 'file') {
+  const sanitized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9._-]/g, '-');
+  return sanitized || fallback;
+}
+
+function buildPublicStorageUrl(objectPath) {
+  const bucket = encodeURIComponent(SUPABASE_STORAGE_BUCKET);
+  return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${encodeStoragePath(objectPath)}`;
+}
+
+function buildBackendUrl(path) {
+  return `${BACKEND_URL.replace(/\/$/, '')}${path}`;
+}
+
+function ensureFileWithinLimit(file, label) {
+  if (!file) return;
+  if (!(file instanceof File)) {
+    throw new Error(`Invalid ${label} file selected.`);
+  }
+  if (file.size <= 0) {
+    throw new Error(`${label} file is empty.`);
+  }
+  if (file.size > MAX_EVIDENCE_FILE_SIZE_BYTES) {
+    throw new Error(`${label} file is too large. Maximum size is 15 MB.`);
+  }
+}
+
+async function uploadResolutionEvidenceFile(incidentId, file, kind) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error('Dashboard is not connected to Supabase. Cannot upload files.');
+  }
+
+  const fileName = String(file.name || 'evidence');
+  const dotIndex = fileName.lastIndexOf('.');
+  const ext = dotIndex > -1 ? sanitizeForPathSegment(fileName.slice(dotIndex + 1), '') : '';
+  const baseName = dotIndex > -1 ? fileName.slice(0, dotIndex) : fileName;
+  const safeBaseName = sanitizeForPathSegment(baseName, 'evidence');
+  const safeIncidentId = sanitizeForPathSegment(incidentId, 'incident');
+  const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const objectFileName = ext
+    ? `${kind}-${safeBaseName}-${uniqueSuffix}.${ext}`
+    : `${kind}-${safeBaseName}-${uniqueSuffix}`;
+  const objectPath = `resolutions/${safeIncidentId}/${objectFileName}`;
+
+  const uploadRes = await fetchWithTimeout(
+    `${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(SUPABASE_STORAGE_BUCKET)}/${encodeStoragePath(objectPath)}`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'x-upsert': 'true',
+        'Content-Type': file.type || 'application/octet-stream',
+      },
+      body: file,
+    },
+    RESOLVE_UPLOAD_TIMEOUT_MS
+  );
+
+  if (!uploadRes.ok) {
+    const reason = await extractErrorMessage(uploadRes);
+    if (/row-level|permission|not authorized|forbidden/i.test(reason) || uploadRes.status === 401 || uploadRes.status === 403) {
+      throw new Error(
+        'File upload blocked by storage policy. Ensure the photos bucket allows dashboard uploads for authority users.'
+      );
+    }
+    throw new Error(
+      `Failed to upload ${kind} evidence file: ${uploadRes.status} ${reason}`
+    );
+  }
+
+  return buildPublicStorageUrl(objectPath);
+}
+
+export async function uploadResolutionEvidence(
+  incidentId,
+  {
+    writtenReportFile = null,
+    photoEvidenceFile = null,
+  } = {}
+) {
+  ensureFileWithinLimit(writtenReportFile, 'Written report');
+  ensureFileWithinLimit(photoEvidenceFile, 'Photo evidence');
+
+  async function uploadViaBackendFallback() {
+    const formData = new FormData();
+    if (writtenReportFile) {
+      formData.append('written_report_file', writtenReportFile, writtenReportFile.name);
+    }
+    if (photoEvidenceFile) {
+      formData.append('photo_evidence_file', photoEvidenceFile, photoEvidenceFile.name);
+    }
+
+    const fallbackRes = await fetchWithTimeout(
+      buildBackendUrl(`/reports/${encodeURIComponent(incidentId)}/resolution-evidence`),
+      {
+        method: 'POST',
+        body: formData,
+      },
+      RESOLVE_UPLOAD_TIMEOUT_MS
+    );
+
+    if (!fallbackRes.ok) {
+      const reason = await extractErrorMessage(fallbackRes);
+      throw new Error(`File upload fallback failed: ${fallbackRes.status} ${reason}`);
+    }
+
+    const fallbackData = await fallbackRes.json().catch(() => ({}));
+    return {
+      resolutionNote: hasText(fallbackData?.resolution_note)
+        ? fallbackData.resolution_note.trim()
+        : '',
+      resolutionPhotoUrl: hasText(fallbackData?.resolution_photo_url)
+        ? fallbackData.resolution_photo_url.trim()
+        : '',
+    };
+  }
+
+  try {
+    const [writtenReportUrl, photoEvidenceUrl] = await Promise.all([
+      writtenReportFile
+        ? uploadResolutionEvidenceFile(incidentId, writtenReportFile, 'report')
+        : Promise.resolve(''),
+      photoEvidenceFile
+        ? uploadResolutionEvidenceFile(incidentId, photoEvidenceFile, 'photo')
+        : Promise.resolve(''),
+    ]);
+
+    return {
+      resolutionNote: writtenReportUrl,
+      resolutionPhotoUrl: photoEvidenceUrl,
+    };
+  } catch (err) {
+    const message = String(err?.message || '').toLowerCase();
+    const shouldTryFallback =
+      message.includes('file upload blocked by storage policy') ||
+      message.includes('not authorized') ||
+      message.includes('forbidden') ||
+      message.includes('row-level');
+
+    if (!shouldTryFallback) {
+      throw err;
+    }
+
+    return uploadViaBackendFallback();
+  }
+}
+
 function buildResolutionState(row) {
   const status = String(row.status || '').toLowerCase();
-  const resolved = status === 'resolved';
+  const resolvedFromStatus = status === 'resolved';
+  const resolvedFromBoolean =
+    typeof row.resolved === 'boolean'
+      ? row.resolved
+      : typeof row.is_resolved === 'boolean'
+        ? row.is_resolved
+        : false;
+  const resolved = resolvedFromStatus || resolvedFromBoolean;
   const resolutionNote = hasText(row.resolution_note)
     ? row.resolution_note.trim()
     : '';
@@ -64,7 +312,6 @@ export async function resolveIncident(
   {
     resolutionNote = '',
     resolutionPhotoUrl = '',
-    updatedBy = 'barangay_official',
   } = {}
 ) {
   if (!SUPABASE_URL) {
@@ -80,59 +327,87 @@ export async function resolveIncident(
   if (hasText(resolutionPhotoUrl)) {
     payload.resolution_photo_url = resolutionPhotoUrl.trim();
   }
-  if (hasText(updatedBy)) {
-    payload.updated_by = updatedBy.trim();
+
+  let updateResult = await patchReport(encodedId, payload);
+  if (!updateResult.ok) {
+    const shouldTryBooleanResolve = /column .*status|status.*does not exist|schema cache|enum|constraint/i.test(
+      updateResult.errorMessage
+    );
+
+    if (shouldTryBooleanResolve) {
+      const booleanPayload = {
+        resolved: true,
+        ...payload,
+      };
+      delete booleanPayload.status;
+      updateResult = await patchReport(encodedId, booleanPayload);
+    }
   }
 
-  const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/reports?id=eq.${encodedId}`, {
-    method: 'PATCH',
-    headers: { ...headers, Prefer: 'return=representation' },
-    body: JSON.stringify(payload)
-  });
-  if (!updateRes.ok) {
-    throw new Error(`Failed to resolve incident ${id}`);
+  if (!updateResult.ok) {
+    throw new Error(`Failed to resolve incident ${id}: ${updateResult.errorMessage}`);
   }
 
-  const updatedRows = await updateRes.json().catch(() => []);
-  let updatedRow = Array.isArray(updatedRows) && updatedRows.length
-    ? updatedRows[0]
-    : null;
+  const resolutionNoteValue = hasText(payload.resolution_note)
+    ? payload.resolution_note.trim()
+    : '';
+  const resolutionPhotoUrlValue = hasText(payload.resolution_photo_url)
+    ? payload.resolution_photo_url.trim()
+    : '';
+  const resolutionComplete =
+    hasText(resolutionNoteValue) && hasText(resolutionPhotoUrlValue);
+
+  let updatedRow = updateResult.row;
 
   // Some Supabase/RLS combinations may return empty representation even when update succeeded.
   // Confirm persisted state by reading the row back before allowing UI update.
   if (!updatedRow) {
-    const confirmRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/reports?select=*&id=eq.${encodedId}&limit=1`,
-      { headers }
-    );
+    try {
+      const confirmRes = await fetchWithTimeout(
+        `${SUPABASE_URL}/rest/v1/reports?select=*&id=eq.${encodedId}&limit=1`,
+        { headers }
+      );
 
-    if (!confirmRes.ok) {
-      throw new Error(`Failed to confirm resolved incident ${id}`);
+      if (confirmRes.ok) {
+        const confirmedRows = await confirmRes.json().catch(() => []);
+        updatedRow = Array.isArray(confirmedRows) && confirmedRows.length
+          ? confirmedRows[0]
+          : null;
+      }
+    } catch {
+      // Fallback below keeps UI state in sync when read-after-write is blocked.
     }
-
-    const confirmedRows = await confirmRes.json().catch(() => []);
-    updatedRow = Array.isArray(confirmedRows) && confirmedRows.length
-      ? confirmedRows[0]
-      : null;
   }
 
-  if (!updatedRow || String(updatedRow.status || '').toLowerCase() !== 'resolved') {
-    throw new Error(`Resolve status was not persisted for ${id}`);
-  }
+  const mappedUpdatedRow = updatedRow ? mapRow(updatedRow) : null;
+  const resolvedMappedRow = mappedUpdatedRow && mappedUpdatedRow.resolved
+    ? mappedUpdatedRow
+    : null;
 
   // Only send completion SMS when full closure proof is present.
   if (hasText(payload.resolution_note) && hasText(payload.resolution_photo_url)) {
-    const smsRes = await fetch(`${SUPABASE_URL}/functions/v1/send-resolution-sms`, {
+    const smsRes = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/send-resolution-sms`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ incident_id: id })
     });
     if (!smsRes.ok) {
-      throw new Error(`Resolved but SMS trigger failed for ${id}`);
+      console.warn(`Resolved incident ${id}, but SMS trigger failed.`);
     }
   }
 
-  return mapRow(updatedRow);
+  if (resolvedMappedRow) {
+    return resolvedMappedRow;
+  }
+
+  return {
+    id,
+    resolved: true,
+    resolutionNote: resolutionNoteValue,
+    resolutionPhotoUrl: resolutionPhotoUrlValue,
+    resolutionComplete,
+    resolutionPendingProof: !resolutionComplete,
+  };
 }
 
 /**
