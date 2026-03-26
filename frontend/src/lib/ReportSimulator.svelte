@@ -12,26 +12,40 @@
   const CHANNELS = ['Telegram', 'SMS', 'Messenger', 'Viber', 'Voice call'];
   const INPUT_TYPES = ['text', 'voice', 'photo'];
 
-  // Los Baños, Laguna barangays
+  // Los Baños, Laguna barangays - from Overpass Turbo
   const LOS_BANOS_BARANGAYS = [
-    'Poblacion',
-    'Baybagin',
-    'Masili',
-    'Magsayo',
-    'Putintan',
-    'Canlubang',
-    'Dalahican'
+    'Anos',
+    'Bagong Silang',
+    'Bambang',
+    'Batong Malake',
+    'Baybayin',
+    'Bayog',
+    'Lalakay',
+    'Maahas',
+    'Malinta',
+    'Mayondon',
+    'Putho-Tuntungin',
+    'San Antonio',
+    'Tadlac',
+    'Timugan'
   ];
 
-  // Barangay coordinates for auto-detection
+  // Barangay coordinates for auto-detection - from Overpass Turbo boundaries
   const BARANGAY_COORDS = {
-    'Poblacion': { lat: 14.1694, lng: 121.2428 },
-    'Baybagin': { lat: 14.1542, lng: 121.2378 },
-    'Masili': { lat: 14.1756, lng: 121.2456 },
-    'Magsayo': { lat: 14.1634, lng: 121.2520 },
-    'Putintan': { lat: 14.1780, lng: 121.2380 },
-    'Canlubang': { lat: 14.1468, lng: 121.2543 },
-    'Dalahican': { lat: 14.1810, lng: 121.2456 }
+    'Anos': { lat: 14.173906, lng: 121.233077 },
+    'Bagong Silang': { lat: 14.139438, lng: 121.210343 },
+    'Bambang': { lat: 14.17166, lng: 121.21682 },
+    'Batong Malake': { lat: 14.159099, lng: 121.230251 },
+    'Baybayin': { lat: 14.181197, lng: 121.223237 },
+    'Bayog': { lat: 14.189349, lng: 121.249352 },
+    'Lalakay': { lat: 14.170333, lng: 121.208158 },
+    'Maahas': { lat: 14.171918, lng: 121.257908 },
+    'Malinta': { lat: 14.184989, lng: 121.231089 },
+    'Mayondon': { lat: 14.189879, lng: 121.238891 },
+    'Putho-Tuntungin': { lat: 14.153004, lng: 121.249828 },
+    'San Antonio': { lat: 14.174239, lng: 121.247285 },
+    'Tadlac': { lat: 14.179379, lng: 121.206832 },
+    'Timugan': { lat: 14.170458, lng: 121.222579 }
   };
 
   // Detect barangay from coordinates
