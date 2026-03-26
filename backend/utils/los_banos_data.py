@@ -7,84 +7,155 @@ Used for restricting reports to Los Baños area and detecting barangay from coor
 LOS_BANOS_CENTER = {'lat': 14.1698, 'lng': 121.2430}
 
 # Map boundaries for Los Baños (latitude and longitude ranges)
+# Extracted from Overpass Turbo barangay boundaries
 LOS_BANOS_BOUNDS = {
-    'min_lat': 14.13,
-    'max_lat': 14.21,
-    'min_lng': 121.22,
-    'max_lng': 121.27
+    'min_lat': 14.111328,
+    'max_lat': 14.197138,
+    'min_lng': 121.171335,
+    'max_lng': 121.266119
 }
 
 # Barangay data with center coordinates and approximate bounds
-# Coordinates approximate, used for reverse geocoding
+# Coordinates extracted from Overpass Turbo - actual OSM administrative boundaries
 LOS_BANOS_BARANGAYS = {
-    'Poblacion': {
-        'lat': 14.1694,
-        'lng': 121.2428,
+    'Anos': {
+        'lat': 14.173906,
+        'lng': 121.233077,
         'bounds': {
-            'min_lat': 14.1650,
-            'max_lat': 14.1738,
-            'min_lng': 121.2380,
-            'max_lng': 121.2476
+            'min_lat': 14.165876,
+            'max_lat': 14.181936,
+            'min_lng': 121.225943,
+            'max_lng': 121.240212
         }
     },
-    'Baybagin': {
-        'lat': 14.1542,
-        'lng': 121.2378,
+    'Bagong Silang': {
+        'lat': 14.139438,
+        'lng': 121.210343,
         'bounds': {
-            'min_lat': 14.1490,
-            'max_lat': 14.1594,
-            'min_lng': 121.2320,
-            'max_lng': 121.2436
+            'min_lat': 14.111328,
+            'max_lat': 14.167548,
+            'min_lng': 121.171335,
+            'max_lng': 121.249351
         }
     },
-    'Masili': {
-        'lat': 14.1756,
-        'lng': 121.2456,
+    'Bambang': {
+        'lat': 14.17166,
+        'lng': 121.21682,
         'bounds': {
-            'min_lat': 14.1708,
-            'max_lat': 14.1804,
-            'min_lng': 121.2408,
-            'max_lng': 121.2504
+            'min_lat': 14.162554,
+            'max_lat': 14.180767,
+            'min_lng': 121.210951,
+            'max_lng': 121.222689
         }
     },
-    'Magsayo': {
-        'lat': 14.1634,
-        'lng': 121.2520,
+    'Batong Malake': {
+        'lat': 14.159099,
+        'lng': 121.230251,
         'bounds': {
-            'min_lat': 14.1586,
-            'max_lat': 14.1682,
-            'min_lng': 121.2472,
-            'max_lng': 121.2568
+            'min_lat': 14.136346,
+            'max_lat': 14.181852,
+            'min_lng': 121.204279,
+            'max_lng': 121.256222
         }
     },
-    'Putintan': {
-        'lat': 14.1780,
-        'lng': 121.2380,
+    'Baybayin': {
+        'lat': 14.181197,
+        'lng': 121.223237,
         'bounds': {
-            'min_lat': 14.1732,
-            'max_lat': 14.1828,
-            'min_lng': 121.2332,
-            'max_lng': 121.2428
+            'min_lat': 14.179488,
+            'max_lat': 14.182906,
+            'min_lng': 121.220531,
+            'max_lng': 121.225943
         }
     },
-    'Canlubang': {
-        'lat': 14.1468,
-        'lng': 121.2543,
+    'Bayog': {
+        'lat': 14.189349,
+        'lng': 121.249352,
         'bounds': {
-            'min_lat': 14.1420,
-            'max_lat': 14.1516,
-            'min_lng': 121.2495,
-            'max_lng': 121.2591
+            'min_lat': 14.181561,
+            'max_lat': 14.197138,
+            'min_lng': 121.238492,
+            'max_lng': 121.260213
         }
     },
-    'Dalahican': {
-        'lat': 14.1810,
-        'lng': 121.2456,
+    'Lalakay': {
+        'lat': 14.170333,
+        'lng': 121.208158,
         'bounds': {
-            'min_lat': 14.1762,
-            'max_lat': 14.1858,
-            'min_lng': 121.2408,
-            'max_lng': 121.2504
+            'min_lat': 14.163604,
+            'max_lat': 14.177061,
+            'min_lng': 121.200216,
+            'max_lng': 121.216099
+        }
+    },
+    'Maahas': {
+        'lat': 14.171918,
+        'lng': 121.257908,
+        'bounds': {
+            'min_lat': 14.156248,
+            'max_lat': 14.187588,
+            'min_lng': 121.249698,
+            'max_lng': 121.266119
+        }
+    },
+    'Malinta': {
+        'lat': 14.184989,
+        'lng': 121.231089,
+        'bounds': {
+            'min_lat': 14.181274,
+            'max_lat': 14.188704,
+            'min_lng': 121.225679,
+            'max_lng': 121.2365
+        }
+    },
+    'Mayondon': {
+        'lat': 14.189879,
+        'lng': 121.238891,
+        'bounds': {
+            'min_lat': 14.181649,
+            'max_lat': 14.19811,
+            'min_lng': 121.231703,
+            'max_lng': 121.246079
+        }
+    },
+    'Putho-Tuntungin': {
+        'lat': 14.153004,
+        'lng': 121.249828,
+        'bounds': {
+            'min_lat': 14.14095,
+            'max_lat': 14.165058,
+            'min_lng': 121.236601,
+            'max_lng': 121.263055
+        }
+    },
+    'San Antonio': {
+        'lat': 14.174239,
+        'lng': 121.247285,
+        'bounds': {
+            'min_lat': 14.166696,
+            'max_lat': 14.181783,
+            'min_lng': 121.240981,
+            'max_lng': 121.253589
+        }
+    },
+    'Tadlac': {
+        'lat': 14.179379,
+        'lng': 121.206832,
+        'bounds': {
+            'min_lat': 14.171661,
+            'max_lat': 14.187097,
+            'min_lng': 121.201377,
+            'max_lng': 121.212287
+        }
+    },
+    'Timugan': {
+        'lat': 14.170458,
+        'lng': 121.222579,
+        'bounds': {
+            'min_lat': 14.159642,
+            'max_lat': 14.181274,
+            'min_lng': 121.212102,
+            'max_lng': 121.233057
         }
     }
 }
