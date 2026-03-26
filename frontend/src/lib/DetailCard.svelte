@@ -39,8 +39,16 @@
     return Boolean(item?.resolved) && !isResolutionComplete(item);
   }
 
+  function normalizeSeverity(value) {
+    const sev = String(value || 'medium').toLowerCase().trim();
+    if (sev === 'critical' || sev === 'high' || sev === 'medium' || sev === 'low') {
+      return sev;
+    }
+    return 'medium';
+  }
+
   $: inc = $selectedIncident;
-  $: sev = inc ? SEV[inc.severity] : null;
+  $: sev = SEV[normalizeSeverity(inc?.severity)] || SEV.medium;
   $: aiText = inc?.ai && String(inc.ai).trim()
     ? inc.ai
     : 'Assessment is being generated from current report context.';
@@ -154,7 +162,7 @@
   }
 </script>
 
-{#if inc && sev}
+{#if inc}
   <div class="card">
     <!-- Header -->
     <div class="card-header">
@@ -172,7 +180,7 @@
 
     <!-- Pills -->
     <div class="pills">
-      <div class="pill" style="background:{sev.bg};color:{sev.color}">{inc.severity}</div>
+      <div class="pill" style="background:{sev.bg};color:{sev.color}">{normalizeSeverity(inc?.severity)}</div>
       <div class="pill ch">{inc.channel}</div>
       <div class="pill tm">{inc.time}</div>
       {#if inc.resolved && isPendingProof}

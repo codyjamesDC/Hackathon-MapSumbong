@@ -67,7 +67,11 @@ export async function resolveIncident(
     updatedBy = 'barangay_official',
   } = {}
 ) {
-  if (!SUPABASE_URL) return;
+  if (!SUPABASE_URL) {
+    throw new Error('Dashboard is not connected to Supabase. Cannot persist resolution status.');
+  }
+
+  const encodedId = encodeURIComponent(id);
 
   const payload = { status: 'resolved' };
   if (hasText(resolutionNote)) {
@@ -80,7 +84,7 @@ export async function resolveIncident(
     payload.updated_by = updatedBy.trim();
   }
 
-  const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/reports?id=eq.${id}`, {
+  const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/reports?id=eq.${encodedId}`, {
     method: 'PATCH',
     headers: { ...headers, Prefer: 'return=representation' },
     body: JSON.stringify(payload)
@@ -90,9 +94,31 @@ export async function resolveIncident(
   }
 
   const updatedRows = await updateRes.json().catch(() => []);
-  const updatedRow = Array.isArray(updatedRows) && updatedRows.length
+  let updatedRow = Array.isArray(updatedRows) && updatedRows.length
     ? updatedRows[0]
     : null;
+
+  // Some Supabase/RLS combinations may return empty representation even when update succeeded.
+  // Confirm persisted state by reading the row back before allowing UI update.
+  if (!updatedRow) {
+    const confirmRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/reports?select=*&id=eq.${encodedId}&limit=1`,
+      { headers }
+    );
+
+    if (!confirmRes.ok) {
+      throw new Error(`Failed to confirm resolved incident ${id}`);
+    }
+
+    const confirmedRows = await confirmRes.json().catch(() => []);
+    updatedRow = Array.isArray(confirmedRows) && confirmedRows.length
+      ? confirmedRows[0]
+      : null;
+  }
+
+  if (!updatedRow || String(updatedRow.status || '').toLowerCase() !== 'resolved') {
+    throw new Error(`Resolve status was not persisted for ${id}`);
+  }
 
   // Only send completion SMS when full closure proof is present.
   if (hasText(payload.resolution_note) && hasText(payload.resolution_photo_url)) {
@@ -106,7 +132,7 @@ export async function resolveIncident(
     }
   }
 
-  return updatedRow ? mapRow(updatedRow) : null;
+  return mapRow(updatedRow);
 }
 
 /**
@@ -180,6 +206,14 @@ function prettifyIssueType(issueType) {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
+function normalizeSeverity(value) {
+  const sev = String(value || 'medium').toLowerCase().trim();
+  if (sev === 'critical' || sev === 'high' || sev === 'medium' || sev === 'low') {
+    return sev;
+  }
+  return 'medium';
+}
+
 function buildAiFallback({ severity, category, barangay }) {
   const sev = String(severity || 'medium');
   const brgy = barangay || 'the reported area';
@@ -251,7 +285,7 @@ function normalizeLocationText(row, barangay) {
  */
 function mapRow(row) {
   const category = deriveCategory(row.issue_type);
-  const severity = row.urgency || 'medium';
+  const severity = normalizeSeverity(row.urgency);
   const barangay = row.barangay || 'Unknown Barangay';
   const locationText = normalizeLocationText(row, barangay);
   const resolutionState = buildResolutionState(row);

@@ -39,15 +39,34 @@
     (async () => {
       try {
         const live = await fetchIncidents();
-        if (mounted && live) {
+        if (mounted && Array.isArray(live) && live.length > 0) {
           incidents.set(live);
         }
       } catch {}
 
       if (!mounted) return;
       ws = subscribeToIncidents(
-        (n) => { incidents.update(l => [n, ...l]); toastMsg.set(`New report via ${n.channel}`); },
-        (u) => { incidents.update(l => l.map(i => i.id === u.id ? u : i)); }
+        (n) => {
+          incidents.update((list) => {
+            if (list.some((i) => String(i.id) === String(n.id))) {
+              return list.map((i) => (String(i.id) === String(n.id) ? { ...i, ...n } : i));
+            }
+            return [n, ...list];
+          });
+          toastMsg.set(`New report via ${n.channel || 'App'}`);
+        },
+        (u) => {
+          incidents.update((list) => {
+            const found = list.some((i) => String(i.id) === String(u.id));
+            if (found) {
+              return list.map((i) => (String(i.id) === String(u.id) ? { ...i, ...u } : i));
+            }
+            return [u, ...list];
+          });
+          if ($selectedIncident && String($selectedIncident.id) === String(u.id)) {
+            selectedIncident.set({ ...$selectedIncident, ...u });
+          }
+        }
       );
     })();
 
@@ -66,7 +85,9 @@
 
 <div class="root">
   <!-- Full-bleed map behind everything -->
-  <MapView />
+  <div class="map-layer">
+    <MapView />
+  </div>
 
   <!-- Topbar overlay -->
   <Topbar on:feedopen={() => feedOpen = true} on:profile={() => navigate('profile')} />
@@ -125,6 +146,12 @@
     width: 100vw;
     height: 100vh;
     overflow: hidden;
+  }
+
+  .map-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
   }
 
   .bottom-actions {

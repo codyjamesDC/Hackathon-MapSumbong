@@ -55,27 +55,42 @@
     return Boolean(inc?.resolved) && !isResolutionComplete(inc);
   }
 
+  function normalizeSeverity(value) {
+    const sev = String(value || 'medium').toLowerCase().trim();
+    if (sev === 'critical' || sev === 'high' || sev === 'medium' || sev === 'low') {
+      return sev;
+    }
+    return 'medium';
+  }
+
   $: filtered = $incidents.filter(i => {
     const fk = $activeFilter.toLowerCase();
-    const fMatch = fk==='all'?true : fk==='open'?!i.resolved : i.severity===fk;
+    const severity = normalizeSeverity(i?.severity);
+    const fMatch = fk==='all'?true : fk==='open'?!i?.resolved : severity===fk;
+    const q = search.toLowerCase();
+    const type = String(i?.type || '').toLowerCase();
+    const barangay = String(i?.barangay || '').toLowerCase();
     const sMatch = !search.trim()?true
-      : i.type.toLowerCase().includes(search.toLowerCase())
-      || i.barangay.toLowerCase().includes(search.toLowerCase());
+      : type.includes(q)
+      || barangay.includes(q);
     return fMatch && sMatch;
   });
 
   $: sorted = [...filtered].sort((a,b) => {
-    if (a.resolved!==b.resolved) return a.resolved?1:-1;
+    if (a?.resolved!==b?.resolved) return a?.resolved?1:-1;
     const o={critical:0,high:1,medium:2,low:3};
-    if (o[a.severity]!==o[b.severity]) return o[a.severity]-o[b.severity];
-    return b.reports-a.reports;
+    const as = normalizeSeverity(a?.severity);
+    const bs = normalizeSeverity(b?.severity);
+    if (o[as]!==o[bs]) return o[as]-o[bs];
+    return Number(b?.reports || 0)-Number(a?.reports || 0);
   });
 
-  $: typeCounts = $incidents.reduce((a,i)=>{ a[i.category]=(a[i.category]||0)+1; return a; },{});
+  $: typeCounts = $incidents.reduce((a,i)=>{ const key = i?.category || 'other'; a[key]=(a[key]||0)+1; return a; },{});
   $: maxType = Math.max(...Object.values(typeCounts),1);
   $: brgyGroups = $incidents.reduce((a,i)=>{
-    if (!a[i.barangay]) a[i.barangay]={count:0,critical:0};
-    a[i.barangay].count++; if(i.severity==='critical') a[i.barangay].critical++; return a;
+    const key = i?.barangay || 'Unknown Barangay';
+    if (!a[key]) a[key]={count:0,critical:0};
+    a[key].count++; if(normalizeSeverity(i?.severity)==='critical') a[key].critical++; return a;
   },{});
 
   function openResolveModal(inc, e) {
@@ -240,7 +255,7 @@
   {#if tab==='incidents'}
     <div class="list">
       {#each sorted as inc (inc.id)}
-        {@const sev = SEV[inc.severity]}
+        {@const sev = SEV[normalizeSeverity(inc?.severity)] || SEV.medium}
         <div
           class="row"
           class:active={$selectedIncident?.id===inc.id}
@@ -267,7 +282,7 @@
           <div class="row-body">
             <div class="row-top">
               <span class="row-name">{inc.type}</span>
-              <span class="row-sev" style="color:{sev.color}">{inc.severity}</span>
+              <span class="row-sev" style="color:{sev.color}">{normalizeSeverity(inc?.severity)}</span>
             </div>
             <div class="row-sub">{inc.barangay}</div>
             <div class="row-meta">
