@@ -687,14 +687,17 @@
       map.on('dblclick', onMapDoubleClick);
       map.on('contextmenu', onMapRightClick);
 
-      // Keep attribution pinned at the bottom-right edge.
-      map.addControl(new maplibregl.AttributionControl(), 'bottom-right');
+      // Keep attribution pinned at the bottom-right edge and always show text.
+      map.addControl(
+        new maplibregl.AttributionControl({ compact: false }),
+        'bottom-right'
+      );
 
       // Keep only the compass and place it bottom-right above the map option cards.
       map.addControl(
         new maplibregl.NavigationControl({
           showCompass: true,
-          showZoom: false,
+          showZoom: true,
           visualizePitch: true
         }),
         'bottom-right'
@@ -795,7 +798,7 @@
 
   .map-controls {
     position: absolute;
-    bottom: 12px;
+    bottom: 52px;
     right: 12px;
     display: flex;
     flex-direction: column;
@@ -805,12 +808,34 @@
 
   /* Put only the compass directly above the Base Map / Barangay mode stack. */
   :global(.maplibregl-ctrl-bottom-right .maplibregl-ctrl-group) {
-    margin: 0 12px 124px 0;
+    margin: 0 12px 216px 0;
   }
 
-  /* Keep attribution fixed at the bottom-right edge. */
+  /* Keep attribution fixed at the bottom-right edge, below the map option cards. */
   :global(.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib) {
     margin: 0 10px 10px 0;
+  }
+
+  :global(.maplibregl-ctrl-attrib) {
+    background: #ffffff !important;
+    border: 1px solid rgba(0, 0, 0, 0.14) !important;
+    border-radius: 999px !important;
+    color: #111111 !important;
+    padding: 2px 10px !important;
+    font-size: 12px !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  }
+
+  :global(.maplibregl-ctrl-attrib a) {
+    color: #111111 !important;
+  }
+
+  :global(.maplibregl-ctrl-attrib-button) {
+    background-color: #ffffff !important;
+  }
+
+  :global(.maplibregl-ctrl-bottom-right) {
+    z-index: 11;
   }
 
   .control-group {
@@ -854,14 +879,24 @@
     border-top-color: #111827 !important;
   }
 
+  :global(.maplibregl-ctrl-group) {
+    border-radius: 12px !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.24) !important;
+    overflow: hidden;
+  }
+
   :global(.maplibregl-ctrl-group button) {
-    background: rgba(10, 10, 16, 0.9) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    color: #a0a0b8 !important;
+    background: #ffffff !important;
+    border: none !important;
+    color: #1f2937 !important;
+  }
+
+  :global(.maplibregl-ctrl-group button + button) {
+    border-top: 1px solid #e5e7eb !important;
   }
 
   :global(.maplibregl-ctrl-group button:hover) {
-    background: rgba(0, 200, 150, 0.1) !important;
-    color: #00c896 !important;
+    background: #f3f4f6 !important;
+    color: #111111 !important;
   }
 </style>
