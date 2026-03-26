@@ -36,6 +36,7 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/mobile/build/
 /coverage/
 
 # Symbolication related
@@ -53,3 +54,6 @@ app.*.map.json
 venv/
 .venv/
 node_modules/*
+frontend/node_modules/*
+
+build/*

@@ -245,7 +245,23 @@ function App() {
     setLoading(false);
   };
 
-  const handleStatusUpdate = async (reportId, newStatus) => {
+  const handleStatusUpdate = async (
+    reportId,
+    newStatus,
+    { resolutionNote = '', resolutionPhotoUrl = '' } = {}
+  ) => {
+    // Business rule: "resolved" is only fully complete when both
+    // written report and evidence photo are attached.
+    if (
+      newStatus === 'resolved' &&
+      (!resolutionNote.trim() || !resolutionPhotoUrl.trim())
+    ) {
+      alert(
+        'Kailangan ang written report at photo evidence bago ma-fully complete ang resolved case.'
+      );
+      return;
+    }
+
     const response = await fetch(
       `${process.env.REACT_APP_BACKEND_URL}/reports/${reportId}/status`,
       {
@@ -253,6 +269,8 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           status: newStatus,
+          resolution_note: resolutionNote,
+          resolution_photo_url: resolutionPhotoUrl,
           updated_by: 'barangay_official'
         }),
       }
@@ -312,6 +330,23 @@ function App() {
 
 export default App;
 ```
+
+## Resolved vs Fully Completed Rule
+
+When an official marks a report as `resolved`, apply these rules:
+
+- Mobile app should immediately show the report status as `resolved`.
+- The case is not fully complete until both are provided:
+  - `resolution_note` (written resolution report)
+  - `resolution_photo_url` (evidence photo)
+- Dashboard may allow selecting `resolved`, but must block final closure if either field is missing.
+- In list/detail UI, show a visible warning state such as `Resolved - pending proof` when note or evidence is missing.
+
+Recommended dashboard UX:
+
+- Require a resolution form before status changes to `resolved`.
+- Keep `Save as in_progress` available when officials are still gathering proof.
+- Only count cases as fully completed in analytics when both note and evidence exist.
 
 ### tailwind.config.js
 

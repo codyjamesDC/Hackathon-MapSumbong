@@ -90,6 +90,20 @@ ENVIRONMENT=development
 FCM_SERVER_KEY=your_fcm_server_key_here
 ```
 
+### Resolved Status Behavior (Mobile)
+
+When backend/dashboard marks a report as `resolved`:
+
+- Mobile app should display the report as `resolved` immediately.
+- Mobile app should still show a follow-up requirement if closure proof is incomplete.
+- Full completion requires both:
+  - `resolution_note` (written report from official)
+  - `resolution_photo_url` (evidence photo)
+
+Recommended resident-facing copy (Taglish):
+
+- `Naka-resolve na ayon sa opisyal, pero hinihintay pa ang written report at photo evidence para ma-finalize ang case.`
+
 ### App Constants
 
 Create `lib/constants/app_constants.dart`:

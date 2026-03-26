@@ -288,6 +288,14 @@ Update report status (officials only).
 }
 ```
 
+**Completion Policy (Resolved Cases):**
+- Setting `status = resolved` updates report status for resident/mobile visibility.
+- A report is considered fully completed only when both are present:
+  - `resolution_note` (written resolution report)
+  - `resolution_photo_url` (evidence photo)
+- If either is missing, clients (dashboard/mobile) must treat the case as `resolved but pending proof`.
+- Dashboard analytics should count a case as fully completed only when both fields are present.
+
 **Response:**
 ```json
 {
