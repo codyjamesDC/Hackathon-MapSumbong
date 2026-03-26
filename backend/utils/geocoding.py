@@ -1,23 +1,31 @@
 import httpx
+import math
 from typing import Dict, Optional
+from .los_banos_data import (
+    LOS_BANOS_CENTER,
+    LOS_BANOS_BARANGAYS,
+    is_within_los_banos,
+    detect_barangay,
+    get_barangay_coordinates
+)
 
 async def get_coordinates(
     location_text: str,
-    barangay: str = 'Nangka, Valenzuela'
+    barangay: str = 'Poblacion'
 ) -> Dict[str, float]:
     """
     Convert location text to coordinates using OpenStreetMap Nominatim
 
     Args:
-        location_text: Location description (e.g., "elementary school gate")
-        barangay: Barangay context for better accuracy
+        location_text: Location description (e.g., "school gate")
+        barangay: Barangay context for better accuracy (Los Baños only)
 
     Returns:
         Dictionary with lat and lng
     """
     try:
-        # Build search query
-        query = f"{location_text}, {barangay}, Metro Manila, Philippines"
+        # Build search query for Los Baños
+        query = f"{location_text}, {barangay}, Los Baños, Laguna, Philippines"
 
         # Call Nominatim API
         async with httpx.AsyncClient() as client:
@@ -43,7 +51,7 @@ async def get_coordinates(
             }
         else:
             # Fallback to barangay center if location not found
-            print(f'Location not found: {query}, using default coordinates')
+            print(f'Location not found: {query}, using barangay center')
             return get_default_coordinates(barangay)
 
     except Exception as e:
@@ -52,17 +60,28 @@ async def get_coordinates(
 
 def get_default_coordinates(barangay: str) -> Dict[str, float]:
     """
-    Get default coordinates for barangay
+    Get default coordinates for Los Baños barangay
     """
-    # Default coordinates for common barangays in Valenzuela
-    defaults = {
-        'Nangka': {'lat': 14.6042, 'lng': 120.9822},
-        'Marulas': {'lat': 14.7080, 'lng': 120.9617},
-        'Malinta': {'lat': 14.7028, 'lng': 120.9681},
-    }
-
-    # Extract barangay name
+    # Extract barangay name cleanly
     barangay_name = barangay.split(',')[0].strip()
 
-    # Return specific coordinates or Valenzuela center
-    return defaults.get(barangay_name, {'lat': 14.6942, 'lng': 120.9834})
+    # Return specific Los Baños barangay coordinates or center
+    coords = get_barangay_coordinates(barangay_name)
+    return coords
+
+def reverse_geocode_barangay(lat: float, lng: float) -> str:
+    """
+    Detect which Los Baños barangay the coordinates belong to.
+    Uses distance calculation to find closest barangay.
+    
+    Args:
+        lat: Latitude
+        lng: Longitude
+        
+    Returns:
+        Barangay name (string)
+    """
+    if not is_within_los_banos(lat, lng):
+        return 'Unknown'
+    
+    return detect_barangay(lat, lng)
