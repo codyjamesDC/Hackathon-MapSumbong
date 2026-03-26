@@ -23,8 +23,6 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen>
   late final Animation<Offset> _slideAnimation;
   late final Animation<double> _fadeAnimation;
 
-  static const bool _devMode = true;
-
   @override
   void initState() {
     super.initState();
@@ -84,12 +82,6 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen>
         );
       }
     }
-  }
-
-  Future<void> _devBypass() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    await authProvider.signInAsGuest();
-    if (mounted) context.go('/home');
   }
 
   @override
@@ -198,16 +190,6 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen>
                         padding: const EdgeInsets.only(top: 12),
                         child: _ErrorCard(message: authProvider.error!),
                       ),
-
-                    // ── Dev Mode ───────────────────────────────────────────
-                    if (_devMode) ...[
-                      const SizedBox(height: 32),
-                      const _DevDivider(),
-                      const SizedBox(height: 16),
-                      _DevBypassButton(
-                        onTap: authProvider.isLoading ? null : _devBypass,
-                      ),
-                    ],
 
                     const SizedBox(height: 40),
 
@@ -443,77 +425,3 @@ class _ErrorCard extends StatelessWidget {
   }
 }
 
-class _DevDivider extends StatelessWidget {
-  const _DevDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(child: Divider(color: AppColors.border)),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: Colors.orange.shade50,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: Colors.orange.shade200),
-          ),
-          child: Text(
-            'DEV MODE',
-            style: TextStyle(
-              fontFamily: 'Nunito',
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              color: Colors.orange.shade600,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
-        const Expanded(child: Divider(color: AppColors.border)),
-      ],
-    );
-  }
-}
-
-class _DevBypassButton extends StatelessWidget {
-  final VoidCallback? onTap;
-
-  const _DevBypassButton({this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: Colors.orange.shade200),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.developer_mode_rounded,
-                  size: 16, color: Colors.orange.shade600),
-              const SizedBox(width: 8),
-              Text(
-                'Laktawan ang login (Dev mode)',
-                style: TextStyle(
-                  fontFamily: 'Nunito',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.orange.shade700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
