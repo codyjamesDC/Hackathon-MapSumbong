@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/reports_provider.dart';
 import '../../models/report.dart';
@@ -20,6 +21,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _startNewReport() {
     context.go('/create-report');
+  }
+
+  Future<void> _callHotline(String number) async {
+    final uri = Uri(scheme: 'tel', path: number);
+    final opened = await launchUrl(uri);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Hindi mabuksan ang tawag para sa $number.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -86,6 +100,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   onCreateReport: _startNewReport,
                   onOpenMap: () => context.go('/map'),
                   onOpenReports: () => context.push('/reports'),
+                  onCallEmergencyHotline: () => _callHotline('117'),
+                  onCallNationalEmergency: () => _callHotline('911'),
                 ),
               ),
             ),
@@ -176,10 +192,7 @@ class _HeroBanner extends StatelessWidget {
   final String? displayName;
   final List<Report> reports;
 
-  const _HeroBanner({
-    this.displayName,
-    required this.reports,
-  });
+  const _HeroBanner({this.displayName, required this.reports});
 
   String get _greeting {
     final hour = DateTime.now().hour;
@@ -283,7 +296,7 @@ class _QuickChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(AppRadius.full),
       ),
       child: Row(
@@ -357,15 +370,58 @@ class _QuickActionsCard extends StatelessWidget {
   final VoidCallback onCreateReport;
   final VoidCallback onOpenMap;
   final VoidCallback onOpenReports;
+  final VoidCallback onCallEmergencyHotline;
+  final VoidCallback onCallNationalEmergency;
 
   const _QuickActionsCard({
     required this.onCreateReport,
     required this.onOpenMap,
     required this.onOpenReports,
+    required this.onCallEmergencyHotline,
+    required this.onCallNationalEmergency,
   });
 
   @override
   Widget build(BuildContext context) {
+    final actions = <_QuickActionItem>[
+      _QuickActionItem(
+        icon: Icons.phone_in_talk_rounded,
+        label: 'Call 911',
+        onTap: onCallNationalEmergency,
+        color: const Color(0xFFDC2626),
+      ),
+      _QuickActionItem(
+        icon: Icons.local_hospital_rounded,
+        label: 'Emergency Hotline',
+        onTap: onCallEmergencyHotline,
+        color: AppColors.critical,
+      ),
+      _QuickActionItem(
+        icon: Icons.auto_awesome_rounded,
+        label: 'New Report',
+        onTap: onCreateReport,
+        color: AppColors.primary,
+      ),
+      _QuickActionItem(
+        icon: Icons.list_alt_rounded,
+        label: 'Mga Report',
+        onTap: onOpenReports,
+        color: AppColors.textSecondary,
+      ),
+      _QuickActionItem(
+        icon: Icons.map_rounded,
+        label: 'Mapa',
+        onTap: onOpenMap,
+        color: AppColors.accent,
+      ),
+    ];
+
+    final placeholderCount = actions.length >= 8 ? 0 : 8 - actions.length;
+    final gridItems = <_QuickActionItem?>[
+      ...actions,
+      ...List<_QuickActionItem?>.filled(placeholderCount, null),
+    ];
+
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -386,37 +442,66 @@ class _QuickActionsCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _ActionButton(
-                  icon: Icons.auto_awesome_rounded,
-                  label: 'AI Report',
-                  onTap: onCreateReport,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _ActionButton(
-                  icon: Icons.map_rounded,
-                  label: 'Mapa',
-                  onTap: onOpenMap,
-                  color: AppColors.accent,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _ActionButton(
-                  icon: Icons.list_alt_rounded,
-                  label: 'Mga Report',
-                  onTap: onOpenReports,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: gridItems.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              childAspectRatio: 1,
+            ),
+            itemBuilder: (context, index) {
+              final item = gridItems[index];
+              if (item == null) {
+                return const _QuickActionPlaceholderTile();
+              }
+              return _ActionButton(
+                icon: item.icon,
+                label: item.label,
+                onTap: item.onTap,
+                color: item.color,
+              );
+            },
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _QuickActionItem {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color color;
+
+  const _QuickActionItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.color,
+  });
+}
+
+class _QuickActionPlaceholderTile extends StatelessWidget {
+  const _QuickActionPlaceholderTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.add_rounded,
+          size: 20,
+          color: AppColors.textSecondary,
+        ),
       ),
     );
   }
@@ -485,11 +570,10 @@ class _ActionButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.md),
       onTap: onTap,
       child: Ink(
-        height: 88,
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: color.withOpacity(0.2)),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -498,9 +582,12 @@ class _ActionButton extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: 'Nunito',
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.w700,
                 color: color,
               ),
