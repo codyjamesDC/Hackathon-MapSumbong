@@ -3,8 +3,24 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+// Los Baños, Laguna bounds
+const _losBanosBounds = {
+  'minLat': 14.13,
+  'maxLat': 14.21,
+  'minLng': 121.22,
+  'maxLng': 121.27,
+};
+
 // Default center: Los Baños, Laguna, Philippines
 const _defaultCenter = LatLng(14.1698, 121.2430);
+
+// Check if a location is within Los Baños bounds
+bool _isWithinLosBanos(LatLng point) {
+  return point.latitude >= _losBanosBounds['minLat']! &&
+      point.latitude <= _losBanosBounds['maxLat']! &&
+      point.longitude >= _losBanosBounds['minLng']! &&
+      point.longitude <= _losBanosBounds['maxLng']!;
+}
 
 class LocationPickerScreen extends StatefulWidget {
   const LocationPickerScreen({super.key});
