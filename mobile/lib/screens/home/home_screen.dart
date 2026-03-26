@@ -66,47 +66,10 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               elevation: 0,
-              actions: [
-                IconButton(
-                  icon: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.map_outlined,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                  onPressed: () => context.go('/map'),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  icon: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.person_outline_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                  onPressed: () => context.go('/profile'),
-                ),
-                const SizedBox(width: 8),
-              ],
               flexibleSpace: FlexibleSpaceBar(
                 background: _HeroBanner(
                   displayName: user?.getDisplayName(),
                   reports: reportsProvider.reports,
-                  onQuickReport: _startNewReport,
                 ),
               ),
             ),
@@ -204,21 +167,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _startNewReport,
-        backgroundColor: AppColors.primary,
-        elevation: 0,
-        icon: const Icon(Icons.add_location_alt_rounded, color: Colors.white),
-        label: const Text(
-          'Mag-ulat',
-          style: TextStyle(
-            fontFamily: 'Nunito',
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-            fontSize: 14,
-          ),
-        ),
-      ),
     );
   }
 }
@@ -228,12 +176,10 @@ class _HomeScreenState extends State<HomeScreen> {
 class _HeroBanner extends StatelessWidget {
   final String? displayName;
   final List<Report> reports;
-  final VoidCallback onQuickReport;
 
   const _HeroBanner({
     this.displayName,
     required this.reports,
-    required this.onQuickReport,
   });
 
   String get _greeting {
@@ -284,29 +230,6 @@ class _HeroBanner extends StatelessWidget {
               const SizedBox(height: 8),
               // Quick status row
               if (reports.isNotEmpty) _QuickStatus(reports: reports),
-              const SizedBox(height: 8),
-              ElevatedButton.icon(
-                onPressed: onQuickReport,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                  backgroundColor: Colors.white,
-                  foregroundColor: AppColors.primary,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.full),
-                  ),
-                ),
-                icon: const Icon(Icons.add_location_alt_rounded, size: 18),
-                label: const Text(
-                  'Bagong report sa AI chat',
-                  style: TextStyle(
-                    fontFamily: 'Nunito',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
             ],
           ),
         ),
